@@ -307,13 +307,13 @@ exports.Dashboard = function(config, WebSocketClient) {
     } else {
       console.warn("Unknown event name from %s: %s", device.name, data.eName);
     }
-    publishData(event);
+    publishData(event, device);
     return Promise.resolve(null);
   }
 
-  function publishData(event) {
+  function publishData(event, device) {
     listeners.forEach(function(listener) {
-      listener.call(listener, getData(), event);
+      listener.call(listener, getData(), event, device);
     });
   }
 
@@ -408,7 +408,7 @@ exports.Dashboard = function(config, WebSocketClient) {
       console.log("Loading " + filename);
       return load(configData, dashData);
     }).catch(function(err) {
-      if (err.errno == 34) {
+      if (err.errno == -2) {
         console.log("Dashboard data not found. Initializing.");
         return load(configData, configData);
       } else {

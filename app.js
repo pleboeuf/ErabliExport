@@ -42,7 +42,7 @@ dashboard.init().then(function() {
     return dashboard.update();
   });
 }).catch(function(err) {
-  console.error("Error stating dashboard: ", err.stack);
+  console.error("Error starting dashboard: ", err.stack);
 });
 var express = require('express');
 var path = require('path');
@@ -54,19 +54,42 @@ app.get('/data.csv', function(req, res) {
   res.setHeader("Content-Type", "text/plain");
   res.send("C,S,V");
 });
-function publishData(event) {
+function insertData(db, event, device) {
   console.log("got event", event);
+  if (event.data.eName === "pump/state") {
+    return new Promise(function(complete, reject) {
+      var deviceId = event.coreid;
+      var deviceName = device.name;
+      var publishDate = event.data.timestamp;
+      var eventType = (event.data.eData === 1) ? "start" : "stop";
+      var sql = "INSERT INTO pompes (device_id, device_name, published_at, event_type) VALUES (?, ?, ?, ?)";
+      var params = [deviceId, deviceName, publishDate, eventType];
+      db.serialize(function() {
+        db.run(sql, params, function(result) {
+          if (result == null) {
+            complete();
+          } else {
+            reject(result);
+          }
+        });
+      });
+    }).catch(function(err) {
+      console.log("Error inserting data", err);
+      throw err;
+    });
+  }
 }
-var http = require('http');
-var port = config.port || '3000';
-app.set('port', port);
-var server = http.createServer(app);
-dashboard.onChange(function(data, event) {
-  publishData(event);
-});
-server.listen(port);
-console.log('HTTP Server started: http://localhost:' + port);
-
-ensureDatabase().catch(function(err) {
+function startApp(db) {
+  var http = require('http');
+  var port = config.port || '3000';
+  app.set('port', port);
+  var server = http.createServer(app);
+  dashboard.onChange(function(data, event, device) {
+    insertData(db, event, device);
+  });
+  server.listen(port);
+  console.log('HTTP Server started: http://localhost:' + port);
+}
+ensureDatabase().then(startApp).catch(function(err) {
   console.error(chalk.red(err));
 });
