@@ -101,11 +101,11 @@ function startApp(db) {
   var http = require('http');
   var port = config.port || '3000';
   app.set('port', port);
-  app.get('/pompes.csv', function(req, res) {
+  app.get('/pumps.csv', function(req, res) {
       res.setHeader("Content-Type", "text/plain");
       return new Promise(function(complete, reject) {
           db.serialize(function() {
-              var sql = "select * from pompes";
+              var sql = "select * from pumps";
               db.each(sql, function(err, row) {
                   res.write(row.device_id + '\t');
                   res.write(row.device_name + '\t');
@@ -119,6 +119,25 @@ function startApp(db) {
           });
       });
   });
+    app.get('/tanks.csv', function(req, res) {
+        res.setHeader("Content-Type", "text/plain");
+        return new Promise(function(complete, reject) {
+            db.serialize(function() {
+                var sql = "select * from tanks";
+                db.each(sql, function(err, row) {
+                    res.write(row.device_id + '\t');
+                    res.write(row.device_name + '\t');
+                    res.write(moment(row.published_at * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                    res.write(row.fill_gallons + '\t');
+                    res.write(row.fill_percent + '\t');
+                    res.write('\n');
+                }, function() {
+                    res.end();
+                });
+
+            });
+        });
+    });
   var server = http.createServer(app);
   dashboard.onChange(function(data, event, device) {
     insertData(db, event, device);
