@@ -1,4 +1,5 @@
 var fs = require('fs');
+var moment = require('moment');
 var Promise = require('promise');
 var readFile = Promise.denodeify(fs.readFile);
 var WebSocketClient = require('websocket').client;
@@ -50,10 +51,7 @@ var app = express();
 app.use(app.router);
 app.use(express.logger());
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/data.csv', function(req, res) {
-  res.setHeader("Content-Type", "text/plain");
-  res.send("C,S,V");
-});
+
 function insertData(db, event, device) {
   console.log("got event", event);
   if (event.data.eName === "pump/state") {
@@ -83,6 +81,24 @@ function startApp(db) {
   var http = require('http');
   var port = config.port || '3000';
   app.set('port', port);
+  app.get('/pompes.csv', function(req, res) {
+      res.setHeader("Content-Type", "text/plain");
+      return new Promise(function(complete, reject) {
+          db.serialize(function() {
+              var sql = "select * from pompes";
+              db.each(sql, function(err, row) {
+                  res.write(row.device_id + '\t');
+                  res.write(row.device_name + '\t');
+                  res.write(moment(row.published_at * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                  res.write(row.event_type + '\t');
+                  res.write('\n');
+              }, function() {
+                res.end();
+              });
+
+          });
+      });
+  });
   var server = http.createServer(app);
   dashboard.onChange(function(data, event, device) {
     insertData(db, event, device);
