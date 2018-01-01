@@ -53,14 +53,14 @@ app.use(express.logger());
 app.use(express.static(path.join(__dirname, 'public')));
 
 function insertData(db, event, device) {
-  console.log("got event", event);
+  console.log("got event", event.data.eName);
+  var deviceId = event.coreid;
+  var deviceName = device.name;
+  var publishDate = event.data.timestamp;
   if (event.data.eName === "pump/state") {
     return new Promise(function(complete, reject) {
-      var deviceId = event.coreid;
-      var deviceName = device.name;
-      var publishDate = event.data.timestamp;
       var eventType = (event.data.eData === 1) ? "start" : "stop";
-      var sql = "INSERT INTO pompes (device_id, device_name, published_at, event_type) VALUES (?, ?, ?, ?)";
+      var sql = "INSERT INTO pumps (device_id, device_name, published_at, event_type) VALUES (?, ?, ?, ?)";
       var params = [deviceId, deviceName, publishDate, eventType];
       db.serialize(function() {
         db.run(sql, params, function(result) {
@@ -74,6 +74,26 @@ function insertData(db, event, device) {
     }).catch(function(err) {
       console.log("Error inserting data", err);
       throw err;
+    });
+  } else if (event.data.eName === "sensor/level") {
+    return new Promise(function(complete, reject) {
+        //event.data.eData;
+        var fill_gallons = event.object.fill * 4.28;
+        var fill_percent = event.object.fill / event.object.capacity;
+        var sql = "INSERT INTO tanks (device_id, device_name, published_at, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, fill_gallons, fill_percent];
+        db.serialize(function() {
+            db.run(sql, params, function(result) {
+                if (result == null) {
+                    complete();
+                } else {
+                    reject(result);
+                }
+            });
+        });
+    }).catch(function(err) {
+        console.log("Error inserting data", err);
+        throw err;
     });
   }
 }

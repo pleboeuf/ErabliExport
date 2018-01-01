@@ -302,6 +302,7 @@ exports.Dashboard = function(config, WebSocketClient) {
         if (tank.device == device.name) {
           tank.rawValue = data.eData;
           tank.lastUpdatedAt = event.published_at;
+          event.object = extendTank(tank);
         }
       });
     } else {
@@ -420,17 +421,19 @@ exports.Dashboard = function(config, WebSocketClient) {
   function getData() {
     return {
       "devices": devices,
-      "tanks": tanks.map(function(tank) {
-        tank = _.extend({}, tank);
-        tank.capacity = tank.getCapacity();
-        tank.fill = tank.getFill();
-        return tank;
-      }),
+      "tanks": tanks.map(extendTank),
       "valves": valves,
       "vacuum": vacuumSensors,
       "pumps": pumps
       // "temperatures": temperatures
     };
+  }
+
+  function extendTank(tank) {
+    tank = _.extend({}, tank);
+    tank.capacity = tank.getCapacity();
+    tank.fill = tank.getFill();
+    return tank;
   }
 
   function load(config, data) {
