@@ -6,7 +6,7 @@
   "store": {
     "filename": "data/dashboard.json"
   },
-  "database": "raw_events.sqlite3",
+  "database": "data.sqlite3",
   "devices": [{
     "name": "EB-P1",
     "description": "Pompe et vide relâcheur #1",
