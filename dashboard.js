@@ -280,7 +280,30 @@ exports.Dashboard = function(config, WebSocketClient) {
     } else if (name == "pump/T1") {
       getPumpOfDevice(device).update(event, value);
     } else if (name == "pump/T2") {
+      var pompe = getPumpOfDevice(device);
+      pompe.update(event, value);
+      pompe.run2long = false;
+    } else if (name == "pump/state") {
       getPumpOfDevice(device).update(event, value);
+    } else if (name == "pump/T2_ONtime") {
+      getPumpOfDevice(device).ONtime = value / 1000;
+    } else if (name == "pump/CurrentDutyCycle") {
+      getPumpOfDevice(device).duty = value / 1000;
+    } else if (name == "pump/endCycle") {
+      var pompe = getPumpOfDevice(device);
+      pompe.duty = value / 1000;
+      pompe.volume += pompe.ONtime * pompe.capacity_gph / 3600;
+    }  else if (name == "pump/warningRunTooLong") {
+      getPumpOfDevice(device).run2long = true;
+    }  else if (name == "pump/debutDeCoulee") {
+      var pompe = getPumpOfDevice(device);
+      pompe.couleeEnCour = true;
+      pompe.debutDeCouleeTS = data.timestamp;
+    }  else if (name == "pump/finDeCoulee") {
+      var pompe = getPumpOfDevice(device);
+      pompe.couleeEnCour = false;
+      pompe.duty = 0;
+      pompe.volume = 0;
 
     } else if (name == "sensor/openSensorV1") {
       getValveOfDevice(device, 1).position = (value == 0 ? "Ouvert" : "???");
@@ -476,7 +499,7 @@ exports.Dashboard = function(config, WebSocketClient) {
       console.log("Loading configured vacuum sensor '%s' on device '%s'", sensor.code, sensor.device);
       return _.extend(sensor, _.omit(sensorData, 'code', 'device'));
     });
-    
+
     pumps = config.pumps.map(function(pump) {
       pump = new Pump(pump);
       if (!data.pumps) {
