@@ -280,9 +280,9 @@ exports.Dashboard = function(config, WebSocketClient) {
     } else if (name == "pump/T1") {
       getPumpOfDevice(device).update(event, value);
     } else if (name == "pump/T2") {
-      var pompe = getPumpOfDevice(device);
-      pompe.update(event, value);
-      pompe.run2long = false;
+      var pump = getPumpOfDevice(device);
+      pump.update(event, value);
+      pump.run2long = false;
     } else if (name == "pump/state") {
       getPumpOfDevice(device).update(event, value);
     } else if (name == "pump/T2_ONtime") {
@@ -290,20 +290,37 @@ exports.Dashboard = function(config, WebSocketClient) {
     } else if (name == "pump/CurrentDutyCycle") {
       getPumpOfDevice(device).duty = value / 1000;
     } else if (name == "pump/endCycle") {
-      var pompe = getPumpOfDevice(device);
-      pompe.duty = value / 1000;
-      pompe.volume += pompe.ONtime * pompe.capacity_gph / 3600;
+
+      var pump = getPumpOfDevice(device);
+      pump.volume += pump.ONtime * pump.capacity_gph / 3600;
+      pumps.forEach(function(pump) {
+        if (pump.device == device.name) {
+          pump.duty = data.eData / 1000;
+          pump.lastUpdatedAt = event.published_at;
+          event.object = extendPump(pump);
+        }
+      });
     }  else if (name == "pump/warningRunTooLong") {
       getPumpOfDevice(device).run2long = true;
     }  else if (name == "pump/debutDeCoulee") {
-      var pompe = getPumpOfDevice(device);
-      pompe.couleeEnCour = true;
-      pompe.debutDeCouleeTS = data.timestamp;
+      var pump = getPumpOfDevice(device);
+      pump.couleeEnCour = true;
+      pump.debutDeCouleeTS = data.timestamp;
+      if (pump.device == device.name) {
+        pump.duty = data.eData / 1000;
+        pump.lastUpdatedAt = event.published_at;
+        event.object = extendPump(pump);
+      }
     }  else if (name == "pump/finDeCoulee") {
-      var pompe = getPumpOfDevice(device);
-      pompe.couleeEnCour = false;
-      pompe.duty = 0;
-      pompe.volume = 0;
+      var pump = getPumpOfDevice(device);
+      pump.couleeEnCour = false;
+      if (pump.device == device.name) {
+        pump.duty = data.eData / 1000;
+        pump.lastUpdatedAt = event.published_at;
+        event.object = extendPump(pump);
+      }
+      pump.duty = 0;
+      pump.volume = 0;
 
     } else if (name == "sensor/openSensorV1") {
       getValveOfDevice(device, 1).position = (value == 0 ? "Ouvert" : "???");
@@ -447,7 +464,7 @@ exports.Dashboard = function(config, WebSocketClient) {
       "tanks": tanks.map(extendTank),
       "valves": valves,
       "vacuum": vacuumSensors,
-      "pumps": pumps
+      "pumps": pumps.map(extendPump)
       // "temperatures": temperatures
     };
   }
@@ -457,6 +474,11 @@ exports.Dashboard = function(config, WebSocketClient) {
     tank.capacity = tank.getCapacity();
     tank.fill = tank.getFill();
     return tank;
+  }
+  function extendPump(pump) {
+    pump = _.extend({}, pump);
+    pump.T2ONtime = pump.ONtime;
+    return pump;
   }
 
   function load(config, data) {
