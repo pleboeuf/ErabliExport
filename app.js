@@ -57,14 +57,16 @@ function insertData(db, event, device) {
   var deviceId = event.coreid;
   var deviceName = device.name;
   var timerMs = event.data.timer / 1000;
-  var t_frac = timerMs - parseInt(timerMs);
-  var publishDate = event.data.timestamp + t_frac;
+  var t_frac = 1000 * (timerMs - parseInt(timerMs));
+  var publishDate = 1000 * event.data.timestamp;
+  var d = new Date(publishDate);
+  var measTime = d.toJSON();
   // Handle pump start/stop events
   if (event.data.eName === "pump/T1" || event.data.eName === "pump/T2") {
     return new Promise(function(complete, reject) {
       var eventType = (event.data.eData === 0) ? "start" : "stop";
-      var sql = "INSERT INTO pumps (device_id, device_name, published_at, event_type) VALUES (?, ?, ?, ?)";
-      var params = [deviceId, deviceName, publishDate, eventType];
+      var sql = "INSERT INTO pumps (device_id, device_name, published_at, temps_mesure, event_type) VALUES (?, ?, ?, ?, ?)";
+      var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType];
       db.serialize(function() {
         db.run(sql, params, function(result) {
           if (result == null) {
@@ -84,10 +86,11 @@ function insertData(db, event, device) {
         //event.data.eData;
         var dutycycle = event.data.eData /1000;
         var rate = event.object.capacity_gph * event.object.duty;
-        var ONtime = event.object.T2ONtime;
-        var volume_gal = event.object.ONtime * event.object.capacity_gph / 3600;
-        var sql = "INSERT INTO cycles (device_id, device_name, end_time, pump_on_time, volume, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?)";
-        var params = [deviceId, deviceName, publishDate, ONtime, volume_gal, dutycycle, rate];
+        var ONtime = Math.abs(event.object.T2ONtime);
+        var volume_gal = ONtime * event.object.capacity_gph / 3600;
+        var volume_total = event.object.volume;
+        var sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, volume_gal, volume_total, dutycycle, rate];
         db.serialize(function() {
             db.run(sql, params, function(result) {
                 if (result == null) {
@@ -106,8 +109,8 @@ function insertData(db, event, device) {
     return new Promise(function(complete, reject) {
         var volume_gal = event.object.volume;
         var eventType = (event.data.eData === 1) ? "start" : "stop";
-        var sql = "INSERT INTO coulee (device_id, device_name, start_stop_time ,event_type, volume) VALUES (?, ?, ?, ?, ?)";
-        var params = [deviceId, deviceName, publishDate, eventType, volume_gal];
+        var sql = "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume) VALUES (?, ?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, volume_gal];
         db.serialize(function() {
             db.run(sql, params, function(result) {
                 if (result == null) {
@@ -125,10 +128,51 @@ function insertData(db, event, device) {
   } else if (event.data.eName === "sensor/level") {
     return new Promise(function(complete, reject) {
         //event.data.eData;
-        var fill_gallons = event.object.fill * 4.28;
+        var fill_gallons = event.object.fill / 4.28;
         var fill_percent = event.object.fill / event.object.capacity;
-        var sql = "INSERT INTO tanks (device_id, device_name, published_at, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?)";
-        var params = [deviceId, deviceName, publishDate, fill_gallons, fill_percent];
+        var sql = "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), fill_gallons, fill_percent];
+        db.serialize(function() {
+            db.run(sql, params, function(result) {
+                if (result == null) {
+                    complete();
+                } else {
+                    reject(result);
+                }
+            });
+        });
+    }).catch(function(err) {
+        console.log("Error inserting data", err);
+        throw err;
+    });
+  } else if (event.data.eName === "sensor/vacuum") {
+    return new Promise(function(complete, reject) {
+        //event.data.eData;
+        var mm_hg = event.data.eData / 100;
+        var sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, mm_hg ) VALUES (?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), mm_hg ];
+        db.serialize(function() {
+            db.run(sql, params, function(result) {
+                if (result == null) {
+                    complete();
+                } else {
+                    reject(result);
+                }
+            });
+        });
+    }).catch(function(err) {
+        console.log("Error inserting data", err);
+        throw err;
+    });
+  }
+  else if (event.data.eName === "sensor/Valve1Pos" || event.data.eName === "sensor/Valve2Pos") {
+    return new Promise(function(complete, reject) {
+        //event.data.eData;
+        var valve_name = event.object.code;
+        var position = event.object.position;;
+
+        var sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position ) VALUES (?, ?, ?, ?, ?,?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position ];
         db.serialize(function() {
             db.run(sql, params, function(result) {
                 if (result == null) {
@@ -158,7 +202,7 @@ function startApp(db) {
               db.each(sql, function(err, row) {
                   res.write(row.device_id + '\t');
                   res.write(row.device_name + '\t');
-                  res.write(moment(row.published_at * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                  res.write(moment(row.published_at).format("YYYY-MM-DD HH:mm:ss") + '\t');
                   res.write(row.event_type + '\t');
                   res.write('\n');
               }, function() {
@@ -177,7 +221,7 @@ function startApp(db) {
               db.each(sql, function(err, row) {
                   res.write(row.device_id + '\t');
                   res.write(row.device_name + '\t');
-                  res.write(moment(row.published_at * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                  res.write(moment(row.published_at).format("YYYY-MM-DD HH:mm:ss") + '\t');
                   res.write(row.fill_gallons + '\t');
                   res.write(row.fill_percent + '\t');
                   res.write('\n');
@@ -197,7 +241,7 @@ function startApp(db) {
               db.each(sql, function(err, row) {
                   res.write(row.device_id + '\t');
                   res.write(row.device_name + '\t');
-                  res.write(moment(row.end_time * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                  res.write(moment(row.end_time).format("YYYY-MM-DD HH:mm:ss") + '\t');
                   res.write(row.pump_on_time + '\t');
                   res.write(row.volume + '\t');
                   res.write(row.dutycycle + '\t');
@@ -219,7 +263,7 @@ function startApp(db) {
               db.each(sql, function(err, row) {
                   res.write(row.device_id + '\t');
                   res.write(row.device_name + '\t');
-                  res.write(moment(row.start_stop_time * 1000).format("YYYY-MM-DD HH:mm:ss") + '\t');
+                  res.write(moment(row.start_stop_time).format("YYYY-MM-DD HH:mm:ss") + '\t');
                   res.write(row.event_type + '\t');
                   res.write(row.volume + '\t');
                   res.write('\n');

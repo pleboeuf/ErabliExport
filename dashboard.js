@@ -286,7 +286,7 @@ exports.Dashboard = function(config, WebSocketClient) {
     } else if (name == "pump/state") {
       getPumpOfDevice(device).update(event, value);
     } else if (name == "pump/T2_ONtime") {
-      getPumpOfDevice(device).ONtime = value / 1000;
+      getPumpOfDevice(device).ONtime =  Math.abs(value / 1000);
     } else if (name == "pump/CurrentDutyCycle") {
       getPumpOfDevice(device).duty = value / 1000;
     } else if (name == "pump/endCycle") {
@@ -322,20 +322,27 @@ exports.Dashboard = function(config, WebSocketClient) {
       pump.duty = 0;
       pump.volume = 0;
 
-    } else if (name == "sensor/openSensorV1") {
-      getValveOfDevice(device, 1).position = (value == 0 ? "Ouvert" : "???");
-    } else if (name == "sensor/closeSensorV1") {
-      getValveOfDevice(device, 1).position = (value == 0 ? "Fermé" : getValveOfDevice(device, 1).position);
-    } else if (name == "sensor/openSensorV2") {
-      getValveOfDevice(device, 2).position = (value == 0 ? "Ouvert" : "???");
-    } else if (name == "sensor/closeSensorV2") {
-      getValveOfDevice(device, 2).position = (value == 0 ? "Fermé" : getValveOfDevice(device, 2).position);
+    // } else if (name == "sensor/openSensorV1") {
+    //   getValveOfDevice(device, 1).position = (value == 0 ? "Ouvert" : "???");
+    // } else if (name == "sensor/closeSensorV1") {
+    //   getValveOfDevice(device, 1).position = (value == 0 ? "Fermé" : getValveOfDevice(device, 1).position);
+    // } else if (name == "sensor/openSensorV2") {
+    //   getValveOfDevice(device, 2).position = (value == 0 ? "Ouvert" : "???");
+    // } else if (name == "sensor/closeSensorV2") {
+    //   getValveOfDevice(device, 2).position = (value == 0 ? "Fermé" : getValveOfDevice(device, 2).position);
 
     } else if (name == "sensor/Valve1Pos") {
-      getValveOfDevice(device, 1).position = positionCode[value];
+      var valve = getValveOfDevice(device, 1);
+      if (valve.device == device.name){
+        valve.position = positionCode[value];
+        event.object = extendValve(valve);
+      }
     } else if (name == "sensor/Valve2Pos") {
-      getValveOfDevice(device, 2).position = positionCode[value];
-
+      var valve = getValveOfDevice(device, 2);
+      if (valve.device == device.name){
+        valve.position = positionCode[value];
+        event.object = extendValve(valve);
+      }
 
     } else if (name == "sensor/level") {
       tanks.forEach(function(tank) {
@@ -479,6 +486,13 @@ exports.Dashboard = function(config, WebSocketClient) {
     pump = _.extend({}, pump);
     pump.T2ONtime = pump.ONtime;
     return pump;
+  }
+
+  function extendValve(valve) {
+    valve = _.extend({}, valve);
+    valve_name = valve.code;
+    valve_position = valve.position;
+    return valve;
   }
 
   function load(config, data) {
