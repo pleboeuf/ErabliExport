@@ -36,6 +36,10 @@ function createDatabase(schema) {
   });
 }
 
+function liters2gallons(liters) {
+  return Math.ceil(liters / 4.54609188);
+}
+
 var dashboard = require('./dashboard.js').Dashboard(config, WebSocketClient);
 dashboard.init().then(function() {
   return dashboard.connect().then(function() {
@@ -128,7 +132,7 @@ function insertData(db, event, device) {
   } else if (event.data.eName === "sensor/level") {
     return new Promise(function(complete, reject) {
         //event.data.eData;
-        var fill_gallons = event.object.fill / 4.28;
+        var fill_gallons = liters2gallons(event.object.fill);
         var fill_percent = event.object.fill / event.object.capacity;
         var sql = "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
         var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), fill_gallons, fill_percent];
