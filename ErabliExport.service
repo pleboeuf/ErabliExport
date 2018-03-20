@@ -1,0 +1,18 @@
+[Unit]
+Description=Data starage service pour Erabliere
+After=network-online.target
+Wants=ErabliCollecteur.service
+
+[Service]
+Type=simple
+
+User=erabliere
+Group=erabliere
+WorkingDirectory=/home/erabliere/ErabliExport
+PIDFile=/home/erabliere/ErabliExport/pid/ErabliExport.pid
+ExecStart=/home/erabliere/.nvm/versions/node/v9.4.0/bin/node /home/erabliere/ErabliExport/app.js
+Restart=on-abnormal
+TimeoutSec=30
+
+[Install]
+WantedBy=multi-user.target

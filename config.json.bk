@@ -6,7 +6,10 @@
   "store": {
     "filename": "data/dashboard.json"
   },
-  "database": "data.sqlite3",
+  "influxdb": {
+	  "host": "localhost",
+	  "port": 8096
+  },
   "devices": [{
     "name": "EB-P1",
     "description": "Pompe et vide relâcheur #1",
@@ -34,19 +37,19 @@
   }, {
     "name": "EB-RS1",
     "description": "Réservoir de sève #1",
-    "id": "1f003f000747343337373738"
+    "id": "40003d001047343438323536"
   }, {
     "name": "EB-RS2",
     "description": "Réservoir de sève #2",
-    "id": "240045001447343338333633"
+    "id": "240051000a51353335323535"
   }, {
     "name": "EB-RS3",
     "description": "Réservoir de sève #3",
-    "id": "33001a000547343233323032"
+    "id": "42003d000f51353532343635"
   }, {
     "name": "EB-RS4",
     "description": "Réservoir de sève #4",
-    "id": "3b0028000847343337373738"
+    "id": "4f003a000751353530373132"
   }, {
     "name": "EB-RS5",
     "description": "Réservoir de sève #5 - pump house",
@@ -62,7 +65,7 @@
   }, {
     "name": "EB-RF2",
     "description": "Réservoir de filtrat #2",
-    "id": "3a002e000347343337373739"
+    "id": "440047001051363036373538"
   }, {
     "name": "EB-RC1",
     "description": "Réservoir de concentré 1",
@@ -77,7 +80,7 @@
     "id": "230031000247343337373739"
   }, {
     "name": "EB-PT1",
-    "description": "Pompe de transfert 1",
+    "description": "Pompe de transfert 1 - Pump House",
     "id": "330024001347343339383037"
   }, {
     "name": "EB-PT2",
@@ -86,7 +89,7 @@
   }, {
     "name": "EB-VEcTk",
     "description": "Valves VaEC et VaTk",
-    "id": "4b001b000b51353335323535"
+    "id": "400032000f47343438323536"
   }],
 
   "tanks": [{
@@ -97,7 +100,9 @@
     "orientation": "horizontal",
     "length": 10718,
     "diameter": 1651,
-    "sensorHeight": 1733
+    "sensorHeight": 1738,
+    "output": "VaS1",
+    "drain": "VaDS1"
   }, {
     "code": "RS2",
     "name": "Réservoir de sève #2",
@@ -106,25 +111,31 @@
     "orientation": "horizontal",
     "length": 7010,
     "diameter": 1842,
-    "sensorHeight": 1813
+    "sensorHeight": 1863,
+    "output": "VaS2",
+    "drain": "VaDS2"
   }, {
     "code": "RS3",
     "name": "Réservoir de sève #3",
     "device": "EB-RS3",
     "shape": "cylinder",
     "orientation": "horizontal",
-    "length": 4180,
-    "diameter": 3000,
-    "sensorHeight": 2700
+    "length": 4128,
+    "diameter": 2438,
+    "sensorHeight": 2090,
+    "output": "VaS3",
+    "drain": "VaDS3"
   }, {
     "code": "RS4",
     "name": "Réservoir de sève #4",
     "device": "EB-RS4",
     "shape": "cylinder",
     "orientation": "horizontal",
-    "length": 4825,
-    "diameter": 3000,
-    "sensorHeight": 2700
+    "length": 3353,
+    "diameter": 2438,
+    "sensorHeight": 2292,
+    "output": "VaS4",
+    "drain": "VaDS4"
   }, {
     "code": "RS5",
     "name": "Réservoir de sève pump house #1",
@@ -133,7 +144,9 @@
     "length": 3657,
     "diameter": 1219,
     "totalHeight": 1067,
-    "sensorHeight": 1140
+    "sensorHeight": 1140,
+    "output": "VaS5",
+    "drain": "VaDS5"
   }, {
     "code": "RS6",
     "name": "Réservoir de sève pump house #2",
@@ -142,16 +155,9 @@
     "length": 3657,
     "diameter": 1219,
     "totalHeight": 1067,
-    "sensorHeight": 1137
-  }, {
-    "code": "RF1",
-    "name": "Réservoir de filtrat #1",
-    "device": "EB-RF1",
-    "shape": "u",
-    "length": 4877,
-    "diameter": 1524,
-    "totalHeight": 1676,
-    "sensorHeight": 1740
+    "sensorHeight": 1137,
+    "output": "VaS6",
+    "drain": "VaDS6"
   }, {
     "code": "RF2",
     "name": "Réservoir de filtrat #2",
@@ -160,7 +166,20 @@
     "orientation": "horizontal",
     "length": 4267,
     "diameter": 1842,
-    "sensorHeight": 1981
+    "sensorHeight": 1872,
+    "output": "VaF2",
+    "drain": "VaDF2"
+  }, {
+    "code": "RF1",
+    "name": "Réservoir de filtrat #1",
+    "device": "EB-RF1",
+    "shape": "u",
+    "length": 4877,
+    "diameter": 1524,
+    "totalHeight": 1676,
+    "sensorHeight": 1700,
+    "output": "none",
+    "drain": "none"
   }, {
     "code": "RC1",
     "name": "Réservoir de concentré #1",
@@ -169,7 +188,9 @@
     "length": 3658,
     "diameter": 1219,
     "totalHeight": 914,
-    "sensorHeight": 986
+    "sensorHeight": 986,
+    "output": "none",
+    "drain": "none"
   }, {
     "code": "RC2",
     "name": "Réservoir de concentré #2",
@@ -178,7 +199,9 @@
     "length": 3658,
     "diameter": 1219,
     "totalHeight": 914,
-    "sensorHeight": 968
+    "sensorHeight": 968,
+    "output": "none",
+    "drain": "none"
   }, {
     "code": "RHC",
     "name": "Réservoir huile a chauffage",
@@ -186,8 +209,10 @@
     "shape": "cylinder",
     "orientation": "horizontal",
     "length": 3000,
-    "diameter": 1500,
-    "sensorHeight": 1500
+    "diameter": 1270,
+    "sensorHeight": 1270,
+    "output": "none",
+    "drain": "none"
   }],
 
   "valves": [{
@@ -257,40 +282,75 @@
   }],
 
   "vacuum": [{
-    "code": "Vac1",
-    "device": "EB-P1"
-  }, {
-    "code": "Vac2",
-    "device": "EB-P2"
-  },{
-    "code": "Vac3",
-    "device": "EB-P3"
-  },{
     "code": "V1",
-    "device": "EB-V1"
-  },{
+    "label": "Rel1",
+    "device": "EB-P1",
+    "offset": 82
+  }, {
     "code": "V2",
-    "device": "EB-V2"
+    "label": "Rel2",
+    "device": "EB-P2",
+    "offset": 58
   },{
     "code": "V3",
-    "device": "EB-V3"
+    "label": "Rel3",
+    "device": "EB-P3",
+    "offset": 0
+  },{
+    "code": "PV1",
+    "label": "Pompe V1",
+    "device": "EB-V1",
+    "offset": 0
+  },{
+    "code": "PV2",
+    "label": "Pompe V2",
+    "device": "EB-V2",
+    "offset": 0
+  },{
+    "code": "PV3",
+    "label": "Pompe V3",
+    "device": "EB-V3",
+    "offset": 0
   }],
 
   "pumps": [{
     "code": "P1",
-    "device": "EB-P1"
+    "device": "EB-P1",
+    "capacity_gph": 2918,
+    "duty": 0,
+    "volume" : 0
   }, {
     "code": "P2",
-    "device": "EB-P2"
+    "device": "EB-P2",
+    "capacity_gph": 2971,
+    "duty": 0,
+    "volume" : 0
   },{
     "code": "P3",
-    "device": "EB-P3"
+    "device": "EB-P3",
+    "capacity_gph": 2931,
+    "duty": 0,
+    "volume" : 0
   }, {
     "code": "PT1",
-    "device": "EB-PT1"
+    "device": "EB-PT1",
+    "capacity_gph": 0
   }, {
     "code": "PT2",
-    "device": "EB-PT2"
+    "device": "EB-PT2",
+    "capacity_gph": 0
+  }, {
+    "code": "Vide1",
+    "device": "EB-V1",
+    "capacity_gph": 0
+  }, {
+    "code": "Vide2",
+    "device": "EB-V2",
+    "capacity_gph": 0
+  }, {
+    "code": "Vide3",
+    "device": "EB-V3",
+    "capacity_gph": 0
   }],
 
   "temperatures": [{

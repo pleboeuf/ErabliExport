@@ -329,7 +329,7 @@
   },{
     "code": "P3",
     "device": "EB-P3",
-    "capacity_gph": 2469,
+    "capacity_gph": 2631,
     "duty": 0,
     "volume" : 0
   }, {
