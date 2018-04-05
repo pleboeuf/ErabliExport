@@ -6,9 +6,6 @@
   "store": {
     "filename": "data/dashboard.json"
   },
-  "dashboardConfig": {
-    "filename": "../ErabliDash/config.json"
-  },
   "influxdb": {
 	  "host": "localhost",
 	  "port": 8096
