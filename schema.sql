@@ -19,7 +19,8 @@ CREATE TABLE valves (
    published_at timestamp,
    temps_mesure datetime,
    valve_name text,
-   position varchar(8)
+   position varchar(8),
+   position_code integer
 
 );
 CREATE TABLE vacuum (
@@ -28,6 +29,19 @@ CREATE TABLE vacuum (
    published_at timestamp,
    temps_mesure datetime,
    mm_hg float
+);
+CREATE TABLE linevacuum (
+   device_id varchar(24),
+   device_name varchar(24),
+   published_at timestamp,
+   temps_mesure datetime,
+   line_name varchar(24),
+   mm_hg float,
+   Vin float,
+   light integer,
+   soc float,
+   volt float,
+   temp float
 );
 CREATE TABLE cycles (
    device_id varchar(24),
