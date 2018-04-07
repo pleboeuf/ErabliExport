@@ -1,0 +1,6 @@
+*.sqlite3
+config.json
+data/
+node_modules/
+.idea*
+*.ipynb*
