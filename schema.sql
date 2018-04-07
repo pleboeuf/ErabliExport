@@ -41,7 +41,9 @@ CREATE TABLE linevacuum (
    light integer,
    soc float,
    volt float,
-   temp float
+   temp float,
+   rssi integer,
+   qual integer
 );
 CREATE TABLE cycles (
    device_id varchar(24),

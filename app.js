@@ -61,10 +61,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 function insertData(db, event, device) {
 	var deviceId = event.coreid;
 	var deviceName = device.name;
-  console.log("got event " + event.data.eName + " from device: " + deviceName);
-	var timerMs = event.data.timer / 1000;
-	var t_frac = 1000 * (timerMs - parseInt(timerMs));
-	var publishDate = 1000 * event.data.timestamp;
+	console.log("got event " + event.name + " from device: " + deviceName);
+
+	if (event.name == "Dev1_Vacuum/Lignes" || event.name == "Vacuum/Lignes"){
+		var d = new Date(event.published_at);
+		var publishDate = d.getTime();
+	} else {
+		var publishDate = 1000 * event.data.timestamp;
+	}
+
 	var d = new Date(publishDate);
 	var measTime = d.toJSON();
 	// Handle pump start/stop events
@@ -170,22 +175,25 @@ function insertData(db, event, device) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
-	} else if (event.data.eName == "Dev1_Vacuum/Lignes" || event.data.eName == "Vacuum/Lignes") { // Special case for lines vacuum devices
+	} else if (event.name == "Dev1_Vacuum/Lignes" || event.name == "Vacuum/Lignes") { // Special case for lines vacuum devices
 		return new Promise(function(complete, reject) {
 			//event.data.eData;
-      debugger
 			var data = event.data;
 			for (var i = 0; i < 4; i++) {
 				try {
-					var sensor = Dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
+					var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
+					// debugger
           if (sensor !== undefined){
             console.log("sensor= " + sensor);
   					var line_name = sensor.inputName;
   					var mm_hg = data[sensor.inputName];
   					var temp = data["temp"];
+						var Vin = data["Vin"];
   					var light = data["li"];
   					var soc = data["soc"];
   					var volt = data["volt"];
+						var rssi = data["rssi"];
+						var qual = data["qual"];
           } else {
             break;
           }
@@ -193,8 +201,8 @@ function insertData(db, event, device) {
 					console.log("Device " + device.name + " has no vacuum sensor");
 				}
       }
-			var sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, light, soc, volt, temp ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, light, soc, volt, temp];
+			var sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual];
 			db.serialize(function() {
 				db.run(sql, params, function(result) {
 					if (result == null) {
@@ -212,8 +220,9 @@ function insertData(db, event, device) {
 		return new Promise(function(complete, reject) {
 			//event.data.eData;
 			var valve_name = event.object.code;
-			var position = event.object.position;;
-
+			var position = event.object.position;
+			var posToCode = {"Fermé": 0, "Ouvert": 1, "Partiel": 2, "Erreur": 3}
+			var position_code = posToCode.position;
 			var sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position ) VALUES (?, ?, ?, ?, ?,?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position];
 			db.serialize(function() {
