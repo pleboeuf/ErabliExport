@@ -244,7 +244,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 			return sensor.device == device.name;
 		});
 		if (sensor === undefined) {
-			throw "Device " + device.name + " has no vacuum sensor";
+			throw "Device " + device.name + " has no vacuum sensor on input: " + input;
 		}
 		return sensor[input];
 	}
@@ -268,16 +268,6 @@ exports.Dashboard = function(config, WebSocketClient) {
 		}
 		return pump;
 	}
-
-	// function getVacuumSensorByCode(code) {
-	//   var sensor = vacuumSensors.filter(function(sensor) {
-	//     return sensor.code == code;
-	//   }).shift();
-	//   if (sensor === undefined) {
-	//     throw "Dashboard has no vacuum sensor with code " + code;
-	//   }
-	//   return sensor;
-	// }
 
 	function handleEvent(device, event) {
 		var data = event.data;
@@ -386,6 +376,10 @@ exports.Dashboard = function(config, WebSocketClient) {
 		} else {
 			console.warn("Unknown event name from %s: %s", device.name, name);
 		}
+		// if (device == "EB-VA1-4" || device == "EB-VF7-9" || device == "EB-VH11-13"){
+    //   console.log("Publishing events: " + event);
+    //   // debugger
+    // }
 		publishData(event, device);
 		return Promise.resolve(null);
 	}
@@ -528,7 +522,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 	}
 
 	function load(config, data) {
-		console.log(data);
+		// console.log(data);
 		devices = config.devices.map(function(dev) {
 			var deviceData = data.devices.filter(function(devData) {
 				return devData.id == dev.id;
