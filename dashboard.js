@@ -639,6 +639,7 @@ exports.Dashboard = function (config, WebSocketClient) {
             pump.load(pumpData);
             return pump;
         });
+        return Promise.resolve();
     }
 
     function store() {
@@ -657,7 +658,6 @@ exports.Dashboard = function (config, WebSocketClient) {
     function checkStore() {
         if (eventsSinceStore > 100) {
             stop();
-            store();
             start();
         }
     }
@@ -670,6 +670,7 @@ exports.Dashboard = function (config, WebSocketClient) {
 
     function stop() {
         clearInterval(storeInterval);
+        return store();
     }
 
     return {
@@ -701,6 +702,9 @@ exports.Dashboard = function (config, WebSocketClient) {
         },
         "start": function () {
             return start();
+        },
+        "stop": function () {
+            return stop();
         },
         "getDevice": getDevice,
         "getTank": getTank,
