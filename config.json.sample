@@ -3,9 +3,7 @@
   "collectors": [{
     "uri": "ws://localhost:8150/"
   }],
-  "store": {
-    "filename": "data/dashboard.json"
-  },
+  "database": "data/db.sqlite",
   "dashboardConfig": {
     "filename": "../ErabliDash/config.json"
   },

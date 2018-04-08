@@ -7,12 +7,13 @@ var readFile = Promise.denodeify(fs.readFile);
 var writeFile = Promise.denodeify(fs.writeFile);
 var exists = Promise.denodeify(fs.exists);
 
-exports.Device = function(id, name, generationId, lastEventSerial, maxDelayMinutes) {
+exports.Device = function(id, name, generationId, lastEventSerial, maxDelayMinutes, eventName) {
 	this.id = id;
 	this.name = name;
 	this.generationId = generationId;
 	this.lastEventSerial = lastEventSerial;
 	this.maxDelayMinutes = maxDelayMinutes;
+	this.eventName = eventName;
 	this.updateFrom = function(dev) {
 		this.generationId = dev.generationId;
 		this.lastEventSerial = dev.lastEventSerial;
@@ -129,7 +130,7 @@ var Pump = exports.Pump = function(pumpConfig) {
 	}
 	self.cycleEnded = function(t0Event, t1Event, t2Event) {
 		self.duty = (t2Event.timer - t1Event.timer) / (t2Event.timer - t0Event.timer);
-		console.log("Pump cycle ended: " + (t1Event.timer - t0Event.timer) + " ms off, then " + (t2Event.timer - t1Event.timer) + " ms on (" + (self.duty * 100).toFixed(0) + "% duty)");
+		// console.log("Pump cycle ended: " + (t1Event.timer - t0Event.timer) + " ms off, then " + (t2Event.timer - t1Event.timer) + " ms on (" + (self.duty * 100).toFixed(0) + "% duty)");
 	}
 };
 
@@ -141,6 +142,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 	var filename = config.store.filename;
 
 	var listeners = []; // For onChange(data, event)
+	var connectCallbacks = [];
 	var eventsSinceStore = 0;
 	var devices = [];
 	var tanks = [];
@@ -214,7 +216,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 			return valve.device == device.name && valve.identifier == identifier;
 		}).shift();
 		if (valve === undefined) {
-			throw "Device " + device.name + " has no valve with identifier " + identifier;
+			throw util.format("Device %s has no valve with identifier %d at %d,%d", device.name, identifier, device.generationId, device.lastEventSerial);
 		}
 		return valve;
 	}
@@ -269,30 +271,39 @@ exports.Dashboard = function(config, WebSocketClient) {
 		return pump;
 	}
 
-	function handleEvent(device, event) {
-		var data = event.data;
-		if (event.name == "Dev1_Vacuum/Lignes" || event.name == "Vacuum/Lignes"){
-			var name = event.name;
-		} else {
-			var name = data.eName;
-			var value = data.eData;
-		}
-		var positionCode = ["Erreur", "Ouverte", "Fermé", "Partiel"];
-		device.lastUpdatedAt = event.published_at;
-		if (name == "sensor/ambientTemp") {
-			device.ambientTemp = value;
-		} else if (name == "sensor/US100sensorTemp") {
-			device.sensorTemp = value;
-		} else if (name == "sensor/enclosureTemp") {
-			device.enclosureTemp = value;
-		} else if (name == "output/enclosureHeating") {
-			device.enclosureHeating = value;
-		} else if (name == "sensor/vacuum") {
-			var sensor = getVacuumSensorOfDevice(device);
-			sensor.rawValue = data.eData;
-			sensor.lastUpdatedAt = event.published_at;
+  var positionCode = ["Erreur", "Ouverte", "Fermé", "Partiel"];
 
-		} else if (name == "Dev1_Vacuum/Lignes") { // Special case for lines vacuum devices
+  function handleEvent(device, event) {
+    const data = event.data;
+    const value = data.eData;
+		// Some events do not have their name in the payload.
+		// For those, we override the event name from configuration.
+		if (!data.eName && device.eventName) {
+			console.log("Overriding event name", device);
+			data.eName = device.eventName;
+		}
+		let name = data.eName;
+		// Some names are wrong...
+		if (name === "Dev1_Vacuum/Lignes") {
+      name = "Vacuum/Lignes";
+    }
+    if (name) {
+      name = name.trim();
+		}
+		device.lastUpdatedAt = event.published_at;
+		if (name === "sensor/ambientTemp") {
+			device.ambientTemp = value;
+		} else if (name === "sensor/US100sensorTemp") {
+			device.sensorTemp = value;
+		} else if (name === "sensor/enclosureTemp") {
+			device.enclosureTemp = value;
+		} else if (name === "output/enclosureHeating") {
+			device.enclosureHeating = value;
+		} else if (name === "sensor/vacuum") {
+      const sensor = getVacuumSensorOfDevice(device);
+			sensor.rawValue = value;
+			sensor.lastUpdatedAt = event.published_at;
+		} else if (name === "Vacuum/Lignes") {
 			for (var i = 0; i < 4; i++) {
 				var sensor = getVacuumSensorOfLineVacuumDevice(device, i);
         if (sensor !== undefined){
@@ -306,75 +317,86 @@ exports.Dashboard = function(config, WebSocketClient) {
           break;
         }
 			}
-
-		} else if (name == "pump/T1") {
+		} else if (name === "pump/T1") {
 			getPumpOfDevice(device).update(event, value);
-		} else if (name == "pump/T2") {
-			var pump = getPumpOfDevice(device);
+		} else if (name === "pump/T2") {
+      const pump = getPumpOfDevice(device);
 			pump.update(event, value);
 			pump.run2long = false;
-		} else if (name == "pump/state") {
+		} else if (name === "pump/state") {
 			getPumpOfDevice(device).update(event, value);
-		} else if (name == "pump/T2_ONtime") {
+		} else if (name === "pump/T2_ONtime") {
 			getPumpOfDevice(device).ONtime = Math.abs(value / 1000);
-		} else if (name == "pump/CurrentDutyCycle") {
+		} else if (name === "pump/CurrentDutyCycle") {
 			getPumpOfDevice(device).duty = value / 1000;
-		} else if (name == "pump/endCycle") {
-
-			var pump = getPumpOfDevice(device);
+		} else if (name === "pump/endCycle") {
+			const pump = getPumpOfDevice(device);
 			pump.volume += pump.ONtime * pump.capacity_gph / 3600;
 			pumps.forEach(function(pump) {
-				if (pump.device == device.name) {
-					pump.duty = data.eData / 1000;
+				if (pump.device === device.name) {
+					pump.duty = value / 1000;
 					pump.lastUpdatedAt = event.published_at;
 					event.object = extendPump(pump);
 				}
 			});
-		} else if (name == "pump/warningRunTooLong") {
+		} else if (name === "pump/warningRunTooLong") {
 			getPumpOfDevice(device).run2long = true;
-		} else if (name == "pump/debutDeCoulee") {
+		} else if (name === "pump/debutDeCoulee") {
 			var pump = getPumpOfDevice(device);
 			pump.couleeEnCour = true;
 			pump.debutDeCouleeTS = data.timestamp;
-			if (pump.device == device.name) {
-				pump.duty = data.eData / 1000;
+			if (pump.device === device.name) {
+				pump.duty = value / 1000;
 				pump.lastUpdatedAt = event.published_at;
 				event.object = extendPump(pump);
 			}
-		} else if (name == "pump/finDeCoulee") {
+		} else if (name === "pump/finDeCoulee") {
 			var pump = getPumpOfDevice(device);
 			pump.couleeEnCour = false;
-			if (pump.device == device.name) {
-				pump.duty = data.eData / 1000;
+			if (pump.device === device.name) {
+				pump.duty = value / 1000;
 				pump.lastUpdatedAt = event.published_at;
 				event.object = extendPump(pump);
 			}
 			pump.duty = 0;
 			pump.volume = 0;
 
-		} else if (name == "sensor/Valve1Pos") {
+		} else if (name === "sensor/Valve1Pos") {
 			var valve = getValveOfDevice(device, 1);
-			if (valve.device == device.name) {
+			if (valve.device === device.name) {
 				valve.position = positionCode[value];
 				event.object = extendValve(valve);
 			}
-		} else if (name == "sensor/Valve2Pos") {
+		} else if (name === "sensor/Valve2Pos") {
 			var valve = getValveOfDevice(device, 2);
-			if (valve.device == device.name) {
+			if (valve.device === device.name) {
 				valve.position = positionCode[value];
 				event.object = extendValve(valve);
 			}
-
-		} else if (name == "sensor/level") {
-			tanks.forEach(function(tank) {
-				if (tank.device == device.name) {
-					tank.rawValue = data.eData;
-					tank.lastUpdatedAt = event.published_at;
-					event.object = extendTank(tank);
-				}
-			});
+		} else if (name === "sensor/level") {
+      tanks.forEach(function (tank) {
+        if (tank.device === device.name) {
+          tank.rawValue = value;
+          tank.lastUpdatedAt = event.published_at;
+          event.object = extendTank(tank);
+        }
+      });
+    } else if (name === "device/boot") {
+			// TODO Ignored
+    } else if (name === "device/NewGenSN") {
+			// TODO Ignored
+    } else if (name === "sensor/openSensorV1") {
+			// TODO Ignored
+    } else if (name === "sensor/closeSensorV1") {
+			// TODO Ignored
+    } else if (name === "sensor/openSensorV2") {
+			// TODO Ignored
+    } else if (name === "sensor/closeSensorV2") {
+			// TODO Ignored
+    } else if (name === "sensor/outOfRange") {
+      // TODO Ignored
 		} else {
-			console.warn("Unknown event name from %s: %s", device.name, name);
+			console.warn("Unknown event name from %s: %s", device.name, name, event);
 		}
 		// if (device == "EB-VA1-4" || device == "EB-VF7-9" || device == "EB-VH11-13"){
     //   console.log("Publishing events: " + event);
@@ -386,7 +408,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 
 	function publishData(event, device) {
 		listeners.forEach(function(listener) {
-			listener.call(listener, getData(), event, device);
+			listener(getData(), event, device);
 		});
 	}
 
@@ -421,8 +443,10 @@ exports.Dashboard = function(config, WebSocketClient) {
 				} else if (device.lastEventSerial < serialNo) {
 					device.lastEventSerial = serialNo;
 					return updateDevice(device).then(handleEventFunc);
+        } else if (device.lastEventSerial == serialNo) {
+          // Ignoring duplicate event
 				} else {
-					console.log(message);
+					console.log(util.format("Old event from device %s in current generation %d: received %d but currently at %d", deviceId, device.generationId, serialNo, device.lastEventSerial), message);
 					return Promise.reject(util.format("Received old event for device %s: %d, %s", deviceId, serialNo, generationId));
 				}
 			}
@@ -444,6 +468,9 @@ exports.Dashboard = function(config, WebSocketClient) {
 		connectBackoff = 1;
 		console.log('WebSocket Client Connected to: ' + uri);
 		onConnectSuccess(connection);
+    connectCallbacks.forEach(function(callback) {
+      callback();
+    });
 		connection.on('error', function(error) {
 			console.log("Connection Error: " + error.toString());
 			reconnect();
@@ -522,7 +549,6 @@ exports.Dashboard = function(config, WebSocketClient) {
 	}
 
 	function load(config, data) {
-		// console.log(data);
 		devices = config.devices.map(function(dev) {
 			var deviceData = data.devices.filter(function(devData) {
 				return devData.id == dev.id;
@@ -531,7 +557,7 @@ exports.Dashboard = function(config, WebSocketClient) {
 				deviceData = {};
 			}
 			console.log("Loading configured device '%s' - '%s' (%s) at %s,%s", dev.name, dev.description, dev.id, deviceData.generationId, deviceData.lastEventSerial);
-			return new Device(dev.id, dev.name, deviceData.generationId, deviceData.lastEventSerial, deviceData.maxDelayMinutes);
+			return new Device(dev.id, dev.name, deviceData.generationId, deviceData.lastEventSerial, dev.maxDelayMinutes, dev.eventName);
 		});
 
 		tanks = config.tanks.map(function(tank) {
@@ -621,9 +647,14 @@ exports.Dashboard = function(config, WebSocketClient) {
 		"init": function() {
 			return init();
 		},
-		"connect": function() {
+		"connect": function(callback) {
 			connect();
+			if (callback) {
+        connectCallbacks.push(callback);
+      }
 			return connectPromise;
+		},
+		"onConnect": function(callback) {
 		},
 		"update": function() {
 			return getDevices().then(function(devices) {

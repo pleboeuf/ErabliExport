@@ -4,10 +4,11 @@ var Promise = require('promise');
 var readFile = Promise.denodeify(fs.readFile);
 var WebSocketClient = require('websocket').client;
 var ExportConfig = require('./config.json');
-var config = require('../ErabliDash/config.json');
+var config = require(ExportConfig.dashboardConfig.filename);
 var sqlite3 = require('sqlite3').verbose();
 var chalk = require('chalk');
-var dbFile = config.database || 'data.sqlite3';
+var dbFile = ExportConfig.database || 'data.sqlite3';
+const util = require('util');
 
 function ensureDatabase() {
 	return new Promise(function(resolve, reject) {
@@ -44,10 +45,13 @@ function liters2gallons(liters) {
 
 var dashboard = require('./dashboard.js').Dashboard(config, WebSocketClient);
 dashboard.init().then(function() {
-	return dashboard.connect().then(function() {
-		dashboard.start();
-		return dashboard.update();
-	});
+	return dashboard.connect(function() {
+	  // Connect & reconnect callback
+    // TODO: Don't update from last state from dashboard.json, but instead from DATABASE
+    // (or commit transaction only after writing dashboard.json)
+    return dashboard.update();
+  });
+  dashboard.start();
 }).catch(function(err) {
 	console.error("Error starting dashboard: ", err.stack);
 });
@@ -61,38 +65,41 @@ app.use(express.static(path.join(__dirname, 'public')));
 function insertData(db, event, device) {
 	var deviceId = event.coreid;
 	var deviceName = device.name;
-	console.log("got event " + event.name + " from device: " + deviceName);
+  const eventName = event.data.eName;
+	// console.log("got event " + eventName + " from device: " + deviceName, event);
 
-	if (event.name == "Dev1_Vacuum/Lignes" || event.name == "Vacuum/Lignes"){
-		var d = new Date(event.published_at);
-		var publishDate = d.getTime();
+	if (eventName === "Vacuum/Lignes") {
+		var publishDate = new Date(event.published_at).getTime();
 	} else {
 		var publishDate = 1000 * event.data.timestamp;
 	}
 
-	var d = new Date(publishDate);
-	var measTime = d.toJSON();
-	// Handle pump start/stop events
+  function runSql(sql, params, complete, reject) {
+    console.log(sql, params);
+    db.serialize(function() {
+      db.run(sql, params, function(result) {
+        if (result == null) {
+          complete();
+        } else {
+          reject(result);
+        }
+      });
+    });
+  }
+
+  // Handle pump start/stop events
 	if (event.data.eName === "pump/T1" || event.data.eName === "pump/T2") {
 		return new Promise(function(complete, reject) {
 			var eventType = (event.data.eData === 0) ? "start" : "stop";
 			var sql = "INSERT INTO pumps (device_id, device_name, published_at, temps_mesure, event_type) VALUES (?, ?, ?, ?, ?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
 		// Handle fin de cycle events
-	} else if (event.data.eName === "pump/endCycle") {
+	} else if (eventName === "pump/endCycle") {
 		return new Promise(function(complete, reject) {
 			//event.data.eData;
 			var dutycycle = event.data.eData / 1000;
@@ -102,89 +109,57 @@ function insertData(db, event, device) {
 			var volume_total = event.object.volume;
 			var sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, volume_gal, volume_total, dutycycle, rate];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
 		// Handle "pump/debutDeCoulee" and "pump/finDeCoulee" events
-	} else if (event.data.eName === "pump/debutDeCoulee" || event.data.eName === "pump/finDeCoulee") {
+	} else if (eventName === "pump/debutDeCoulee" || eventName === "pump/finDeCoulee") {
 		return new Promise(function(complete, reject) {
 			var volume_gal = event.object.volume;
 			var eventType = (event.data.eData === 1) ? "start" : "stop";
 			var sql = "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume) VALUES (?, ?, ?, ?, ?, ?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, volume_gal];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
 		// Handle "sensor/level" events
-	} else if (event.data.eName === "sensor/level") {
+	} else if (eventName === "sensor/level") {
 		return new Promise(function(complete, reject) {
-			//event.data.eData;
-			var fill_gallons = liters2gallons(event.object.fill);
-			var fill_percent = event.object.fill / event.object.capacity;
-			var sql = "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
-			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), fill_gallons, fill_percent];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+			if (event.object) {
+        var fill_gallons = liters2gallons(event.object.fill);
+        var fill_percent = event.object.fill / event.object.capacity;
+        var sql = "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
+        var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), fill_gallons, fill_percent];
+        runSql(sql, params, complete, reject);
+      } else {
+				console.warn(util.format("Got sensor/level from device %s, but tank is undefined", event.coreid), event);
+			}
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
-	} else if (event.data.eName === "sensor/vacuum") {
+	} else if (eventName === "sensor/vacuum") {
 		return new Promise(function(complete, reject) {
-			//event.data.eData;
 			var mm_hg = event.data.eData / 100;
 			var sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, mm_hg ) VALUES (?, ?, ?, ?, ?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), mm_hg];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
-	} else if (event.name == "Dev1_Vacuum/Lignes" || event.name == "Vacuum/Lignes") { // Special case for lines vacuum devices
+	} else if (eventName === "Vacuum/Lignes") {
 		return new Promise(function(complete, reject) {
-			//event.data.eData;
 			var data = event.data;
 			for (var i = 0; i < 4; i++) {
 				try {
 					var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
-					// debugger
           if (sensor !== undefined){
-            console.log("sensor= " + sensor);
+            console.log("sensor", sensor);
   					var line_name = sensor.inputName;
   					var mm_hg = data[sensor.inputName];
   					var temp = data["temp"];
@@ -203,37 +178,21 @@ function insertData(db, event, device) {
       }
 			var sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
 		});
-	} else if (event.data.eName === "sensor/Valve1Pos" || event.data.eName === "sensor/Valve2Pos") {
+	} else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
 		return new Promise(function(complete, reject) {
 			//event.data.eData;
 			var valve_name = event.object.code;
 			var position = event.object.position;
-			var posToCode = {"Fermé": 0, "Ouvert": 1, "Partiel": 2, "Erreur": 3}
+			var posToCode = {"Fermé": 0, "Ouvert": 1, "Partiel": 2, "Erreur": 3};
 			var position_code = posToCode.position;
 			var sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position ) VALUES (?, ?, ?, ?, ?,?)";
 			var params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position];
-			db.serialize(function() {
-				db.run(sql, params, function(result) {
-					if (result == null) {
-						complete();
-					} else {
-						reject(result);
-					}
-				});
-			});
+      runSql(sql, params, complete, reject);
 		}).catch(function(err) {
 			console.log("Error inserting data", err);
 			throw err;
