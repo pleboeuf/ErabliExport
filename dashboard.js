@@ -209,10 +209,10 @@ exports.Dashboard = function (config, WebSocketClient) {
         client.connect(uri, 'event-stream');
     }
 
-    var connectBackoff = 500;
+    var connectBackoff = 50;
 
     function reconnect() {
-        connectBackoff = Math.min(connectBackoff * 2, 1000 * 60);
+        connectBackoff = Math.min(connectBackoff * 1.5, 1000 * 60);
         setTimeout(connect, connectBackoff);
     }
 
@@ -411,14 +411,13 @@ exports.Dashboard = function (config, WebSocketClient) {
         } else {
             console.warn("Unknown event name from %s: %s", device.name, name, event);
         }
-        publishData(event, device);
-        return Promise.resolve(null);
+        return publishData(event, device);
     }
 
     function publishData(event, device) {
-        listeners.forEach(function (listener) {
-            listener(getData(), event, device);
-        });
+        return Promise.all(listeners.map(function (listener) {
+            return listener(getData(), event, device);
+        }));
     }
 
     function handleMessage(message) {
@@ -437,7 +436,7 @@ exports.Dashboard = function (config, WebSocketClient) {
                 // return addDevice(new Device(deviceId, "New" + deviceId, generationId, serialNo)).then(handleEvent);
             } else {
                 var handleEventFunc = function () {
-                    handleEvent(device, message)
+                    return handleEvent(device, message)
                 };
                 if (typeof device.generationId === 'undefined') {
                     console.log("First event received for device %s (%s,%s)", deviceId, generationId, serialNo);
@@ -477,10 +476,10 @@ exports.Dashboard = function (config, WebSocketClient) {
             const deviceId = message.data.command.device;
             delete pendingRequests[deviceId];
             if (Object.keys(pendingRequests).length > 0) {
-                console.log(util.format("Completed query for device %s; waiting for %d other devices.",
-                    deviceId, Object.keys(pendingRequests).length));
+                console.log(util.format("Completed query for device %s with %d events; waiting for %d other devices.",
+                    deviceId, message.data.command.sent, Object.keys(pendingRequests).length));
             } else {
-                console.log(util.format("Completed query for device %s; All queries completed.", deviceId));
+                console.log(util.format("Completed query for device %s with %d events; All queries completed.", deviceId, message.data.command.sent));
                 store();
                 queryCompleteCallbacks.forEach(function (callback) {
                     callback();
@@ -588,7 +587,6 @@ exports.Dashboard = function (config, WebSocketClient) {
     }
 
     function load(config, data) {
-        console.log("Configuration:", data);
         devices = config.devices.map(function (dev) {
             var deviceData = data.devices.filter(function (devData) {
                 return devData.id === dev.id;
