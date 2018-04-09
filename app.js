@@ -44,16 +44,21 @@ function liters2gallons(liters) {
 }
 
 var dashboard = require('./dashboard.js').Dashboard(config, WebSocketClient);
-dashboard.init().then(function() {
-	return dashboard.connect(function() {
-	  // Connect & reconnect callback
+dashboard.init().then(function () {
+  return dashboard.connect(function () {
+    // Connected or re-connected
     // TODO: Don't update from last state from dashboard.json, but instead from DATABASE
     // (or commit transaction only after writing dashboard.json)
     return dashboard.update();
+  }).then(function () {
+    // Connected for first time
+    dashboard.onQueryComplete(function () {
+      dashboard.subscribe();
+    });
+    return dashboard.start();
   });
-  dashboard.start();
-}).catch(function(err) {
-	console.error("Error starting dashboard: ", err.stack);
+}).catch(function (err) {
+  console.error("Error starting dashboard: ", err.stack);
 });
 var express = require('express');
 var path = require('path');
@@ -75,7 +80,7 @@ function insertData(db, event, device) {
 	}
 
   function runSql(sql, params, complete, reject) {
-    console.log(sql, params);
+    // console.log(sql, params);
     db.serialize(function() {
       db.run(sql, params, function(result) {
         if (result == null) {
