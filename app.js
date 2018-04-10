@@ -129,7 +129,7 @@ function insertData(db, event, device) {
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
         // TODO FIX THIS TERRIBLE CODE
-        for (const i = 0; i < 4; i++) {
+        for (var i = 0; i < 4; i++) {
             try {
                 const sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
                 if (sensor !== undefined) {
