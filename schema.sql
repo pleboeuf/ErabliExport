@@ -3,7 +3,8 @@ CREATE TABLE pumps (
    device_name varchar(24),
    published_at timestamp,
    temps_mesure datetime,
-   event_type varchar(8)
+   event_type varchar(8),
+   pump_state integer
 );
 CREATE TABLE tanks (
    device_id varchar(24),
@@ -37,13 +38,13 @@ CREATE TABLE linevacuum (
    temps_mesure datetime,
    line_name varchar(24),
    mm_hg float,
-   Vin float,
+   temp float,
    light integer,
    soc float,
    volt float,
-   temp float,
    rssi integer,
-   qual integer
+   qual integer,
+   Vin float
 );
 CREATE TABLE cycles (
    device_id varchar(24),

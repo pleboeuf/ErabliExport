@@ -88,9 +88,10 @@ function insertData(db, event, device) {
 
     // Handle pump start/stop events
     if (event.data.eName === "pump/T1" || event.data.eName === "pump/T2") {
-        const eventType = (event.data.eData === 0) ? "start" : "stop";
-        const sql = "INSERT INTO pumps (device_id, device_name, published_at, temps_mesure, event_type) VALUES (?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType];
+		const pump_state = event.data.eData;
+        const eventType = (pump_state === 0) ? "start" : "stop";
+        const sql = "INSERT INTO pumps (device_id, device_name, published_at, temps_mesure, event_type, pump_state) VALUES (?, ?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, pump_state];
         return runSql(sql, params);
         // Handle fin de cycle events
     } else if (eventName === "pump/endCycle") {
@@ -134,15 +135,15 @@ function insertData(db, event, device) {
                 const sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
                 if (sensor !== undefined) {
                     console.log("sensor", sensor);
-                    var line_name = sensor.inputName;
-                    var mm_hg = data[sensor.inputName];
-                    var temp = data["temp"];
-                    var Vin = data["Vin"];
-                    var light = data["li"];
-                    var soc = data["soc"];
-                    var volt = data["volt"];
-                    var rssi = data["rssi"];
-                    var qual = data["qual"];
+                    const line_name = sensor.code;
+                    const mm_hg = data[sensor.inputName];
+                    const temp = data["temp"];
+                    const Vin = data["Vin"];
+                    const light = data["li"];
+                    const soc = data["soc"];
+                    const volt = data["volt"];
+                    const rssi = data["rssi"];
+                    const qual = data["qual"];
                 } else {
                     break;
                 }
@@ -150,16 +151,16 @@ function insertData(db, event, device) {
                 console.log("Device " + device.name + " has no vacuum sensor");
             }
         }
-        const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, Vin, light, soc, volt, temp, rssi, qual];
+        const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin];
         return runSql(sql, params);
     } else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
         const valve_name = event.object.code;
         const position = event.object.position;
-        const posToCode = {"Fermé": 0, "Ouvert": 1, "Partiel": 2, "Erreur": 3};
+        const posToCode = {"Fermé": 0, "Ouvert": 1, "Ouverte": 1, "Partiel": 2, "Erreur": 3};
         const position_code = posToCode.position;
-        const sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position ) VALUES (?, ?, ?, ?, ?,?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position];
+        const sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position, position_code ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position, position_code[position]];
         return runSql(sql, params);
     } else {
         return Promise.resolve();
