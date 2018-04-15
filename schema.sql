@@ -22,7 +22,6 @@ CREATE TABLE valves (
    valve_name text,
    position varchar(8),
    position_code integer
-
 );
 CREATE TABLE vacuum (
    device_id varchar(24),
