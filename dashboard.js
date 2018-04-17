@@ -246,14 +246,14 @@ exports.Dashboard = function (config, WebSocketClient) {
         return sensor;
     }
 
-    function getVacuumSensorOfLineVacuumDevice(device, input) {
+    function getVacuumSensorOfLineVacuumDevice(device) {
         var sensor = vacuumSensors.filter(function (sensor) {
             return sensor.device === device.name;
         });
         if (sensor === undefined) {
             throw "Device " + device.name + " has no vacuum sensor on input: " + input;
         }
-        return sensor[input];
+        return sensor;
     }
 
     function getVacuumSensorByCode(code) {
@@ -315,19 +315,15 @@ exports.Dashboard = function (config, WebSocketClient) {
             sensor.rawValue = value;
             sensor.lastUpdatedAt = event.published_at;
         } else if (name === "Vacuum/Lignes") {
-            for (var i = 0; i < 4; i++) {
-                var sensor = getVacuumSensorOfLineVacuumDevice(device, i);
-                if (sensor !== undefined) {
-                    sensor.rawValue = data[sensor.inputName] * 100;
-                    sensor.lastUpdatedAt = event.published_at;
-                    sensor.temp = data["temp"];
-                    sensor.lightIntensity = data["li"];
-                    sensor.percentCharge = data["soc"];
-                    sensor.batteryVolt = data["volt"];
-                } else {
-                    break;
-                }
-            }
+            const sensors = getVacuumSensorOfLineVacuumDevice(device);
+            sensors.forEach(function(sensor){
+                sensor.rawValue = data[sensor.inputName] * 100;
+                sensor.lastUpdatedAt = event.published_at;
+                sensor.temp = data["temp"];
+                sensor.lightIntensity = data["li"];
+                sensor.percentCharge = data["soc"];
+                sensor.batteryVolt = data["volt"];
+            });
         } else if (name === "pump/T1") {
             getPumpOfDevice(device).update(event, value);
         } else if (name === "pump/T2") {

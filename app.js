@@ -129,25 +129,21 @@ function insertData(db, event, device) {
         return runSql(sql, params);
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
-		// TODO FIX THIS TERRIBLE CODE
-        for (var i = 0; i < 4; i++) {
-			const sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
-			if (sensor !== undefined) {
-				// console.log("sensor", sensor);
-				const line_name = sensor.code;
-				const mm_hg = data[sensor.inputName];
-				const temp = data["temp"];
-				const Vin = data["Vin"];
-				const light = data["li"];
-				const soc = data["soc"];
-				const volt = data["volt"];
-				const rssi = data["rssi"];
-				const qual = data["qual"];
-				const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-				const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin];
-				runSql(sql, params);
-			} 
-       }
+ 		const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
+        sensors.forEach (function(sensor) {
+            const line_name = sensor.code;
+            const mm_hg = data[sensor.inputName];
+            const temp = data["temp"];
+            const Vin = data["Vin"];
+            const light = data["li"];
+            const soc = data["soc"];
+            const volt = data["volt"];
+            const rssi = data["rssi"];
+            const qual = data["qual"];
+            const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin];
+            runSql(sql, params);
+        });
 		return Promise.resolve();
     } else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
         const valve_name = event.object.code;
