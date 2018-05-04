@@ -9,6 +9,7 @@ const sqlite3 = require('better-sqlite3');
 const chalk = require('chalk');
 const dbFile = ExportConfig.database || 'data.sqlite3';
 const util = require('util');
+const nodeArg = process.argv;
 
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
@@ -50,7 +51,9 @@ dashboard.init().then(function () {
     }).then(function () {
         // Connected for first time
         dashboard.onQueryComplete(function () {
-            dashboard.subscribe();
+            if (nodeArg[2] === undefined || nodeArg[2] !== "playbackOnly"){
+              dashboard.subscribe();             
+            }
         });
         return dashboard.start();
     });
@@ -71,9 +74,9 @@ function insertData(db, event, device) {
     // console.log("got event " + eventName + " from device: " + deviceName, event);
 
     if (eventName === "Vacuum/Lignes") {
-        var publishDate = new Date(event.published_at).getTime();
+        const publishDate = new Date(event.published_at).getTime();
     } else {
-        var publishDate = 1000 * event.data.timestamp;
+        var publishDate = 1000 * event.data.timestamp + event.data.timer % 1000;
     }
 
     function runSql(sql, params) {
@@ -90,8 +93,9 @@ function insertData(db, event, device) {
     if (event.data.eName === "pump/T1" || event.data.eName === "pump/T2") {
 		const pump_state = event.data.eData;
         const eventType = (event.data.eData === 0) ? "start" : "stop";
-        const sql = "INSERT INTO pumps (device_id, device_name, published_at, temps_mesure, event_type, pump_state) VALUES (?, ?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, pump_state];
+        const dev_timer = event.data.timer;
+        const sql = "INSERT INTO pumps (device_id, device_name, published_at, dev_timer, temps_mesure, event_type, pump_state) VALUES (?, ?, ?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, dev_timer, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, pump_state];
         return runSql(sql, params);
         // Handle fin de cycle events
     } else if (eventName === "pump/endCycle") {
