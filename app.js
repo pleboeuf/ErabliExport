@@ -63,8 +63,8 @@ dashboard.init().then(function () {
 const express = require('express');
 const path = require('path');
 const app = express();
-app.use(app.router);
-app.use(express.logger());
+// app.use(app.router);
+// app.use(express.logger());
 app.use(express.static(path.join(__dirname, 'public')));
 
 function insertData(db, event, device) {
