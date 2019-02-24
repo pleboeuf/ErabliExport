@@ -12,7 +12,7 @@
     "moment": "^2.24.0",
     "promise": "^8.0.2",
     "underscore": "^1.9.1",
-    "websocket": ""
+    "websocket": "^1.0.28"
   },
   "engines": {
     "node": ">= 8.15.0"
