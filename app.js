@@ -63,20 +63,31 @@ dashboard.init().then(function () {
 const express = require('express');
 const path = require('path');
 const app = express();
-// app.use(app.router);
-// app.use(express.logger());
 app.use(express.static(path.join(__dirname, 'public')));
 
 function insertData(db, event, device) {
     const deviceId = event.coreid;
     const deviceName = device.name;
-    const eventName = event.data.eName;
+    var eventName = event.data.eName;
+    var publishDate;
     // console.log("got event " + eventName + " from device: " + deviceName, event);
 
+    if (!eventName){
+        if (device.eventName) {
+            event.data.eName = device.eventName;
+            eventName = event.data.eName;
+            console.log(util.format("(Dashboard) Overriding event name to %s for device %s", device.eventName, device.id));
+        } else {
+            event.data.eName =  "Vacuum/Lignes";
+            eventName = event.data.eName;
+            console.log(util.format("(Dashboard) Overriding event name from DB to 'Vacuum/Lignes' for device %s", device.id));
+        }
+    }
+
     if (eventName === "Vacuum/Lignes") {
-        const publishDate = new Date(event.published_at).getTime();
+        publishDate = new Date(event.published_at).getTime();
     } else {
-        var publishDate = 1000 * event.data.timestamp + event.data.timer % 1000;
+        publishDate = 1000 * event.data.timestamp + event.data.timer % 1000;
     }
 
     function runSql(sql, params) {
@@ -99,14 +110,19 @@ function insertData(db, event, device) {
         return runSql(sql, params);
         // Handle fin de cycle events
     } else if (eventName === "pump/endCycle") {
-        const dutycycle = event.data.eData / 1000;
-        const rate = event.object.capacity_gph * event.object.duty;
-        const ONtime = Math.abs(event.object.T2ONtime);
-        const volume_gal = ONtime * event.object.capacity_gph / 3600;
-        const volume_total = event.object.volume;
-        const sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, volume_gal, volume_total, dutycycle, rate];
-        return runSql(sql, params);
+        if (event.object) {
+            const dutycycle = event.data.eData / 1000;
+            const rate = event.object.capacity_gph * event.object.duty;
+            const ONtime = Math.abs(event.object.T2ONtime);
+            const volume_gal = ONtime * event.object.capacity_gph / 3600;
+            const volume_total = event.object.volume;
+            const sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, volume_gal, volume_total, dutycycle, rate];
+            return runSql(sql, params);
+        } else {
+            console.warn(util.format("Got pump/endCycle from device %s, but pump is undefined", event.coreid), event);
+            return Promise.resolve();
+        }
         // Handle "pump/debutDeCoulee" and "pump/finDeCoulee" events
     } else if (eventName === "pump/debutDeCoulee" || eventName === "pump/finDeCoulee") {
         const volume_gal = event.object.volume;

@@ -287,34 +287,42 @@ exports.Dashboard = function (config, WebSocketClient) {
             });
         }
         const value = data.eData;
+        var eventName = data.eName;    
         // Some events do not have their name in the payload.
         // For those, we override the event name from configuration.
-        if (!data.eName && device.eventName) {
-            // console.log(util.format("Overriding event name to %s for device %s", device.eventName, device.id));
-            data.eName = device.eventName;
+        if (!eventName){
+            if (device.eventName) {
+                event.data.eName = device.eventName;
+                eventName = event.data.eName;
+                // console.log(util.format("Overriding event name to %s for device %s", device.eventName, device.id));
+            } else {
+                event.data.eName =  "Vacuum/Lignes";
+                eventName = event.data.eName;
+                // console.log(util.format("Overriding event name from DB to 'Vacuum/Lignes' for device %s", device.id));
+            }
         }
-        var name = data.eName;
+    
         // Some names are wrong...
-        if (name === "Dev1_Vacuum/Lignes") {
-            name = "Vacuum/Lignes";
+        if (eventName === "Dev1_Vacuum/Lignes") {
+            eventName = "Vacuum/Lignes";
         }
-        if (name) {
-            name = name.trim();
+        if (eventName) {
+            eventName = eventName.trim();
         }
         device.lastUpdatedAt = event.published_at;
-        if (name === "sensor/ambientTemp") {
+        if (eventName === "sensor/ambientTemp") {
             device.ambientTemp = value;
-        } else if (name === "sensor/US100sensorTemp") {
+        } else if (eventName === "sensor/US100sensorTemp") {
             device.sensorTemp = value;
-        } else if (name === "sensor/enclosureTemp") {
+        } else if (eventName === "sensor/enclosureTemp") {
             device.enclosureTemp = value;
-        } else if (name === "output/enclosureHeating") {
+        } else if (eventName === "output/enclosureHeating") {
             device.enclosureHeating = value;
-        } else if (name === "sensor/vacuum") {
+        } else if (eventName === "sensor/vacuum") {
             const sensor = getVacuumSensorOfDevice(device);
             sensor.rawValue = value;
             sensor.lastUpdatedAt = event.published_at;
-        } else if (name === "Vacuum/Lignes") {
+        } else if (eventName === "Vacuum/Lignes") {
             const sensors = getVacuumSensorOfLineVacuumDevice(device);
             sensors.forEach(function(sensor){
                 sensor.rawValue = data[sensor.inputName] * 100;
@@ -324,19 +332,19 @@ exports.Dashboard = function (config, WebSocketClient) {
                 sensor.percentCharge = data["soc"];
                 sensor.batteryVolt = data["volt"];
             });
-        } else if (name === "pump/T1") {
+        } else if (eventName === "pump/T1") {
             getPumpOfDevice(device).update(event, value);
-        } else if (name === "pump/T2") {
+        } else if (eventName === "pump/T2") {
             const pump = getPumpOfDevice(device);
             pump.update(event, value);
             pump.run2long = false;
-        } else if (name === "pump/state") {
+        } else if (eventName === "pump/state") {
             getPumpOfDevice(device).update(event, value);
-        } else if (name === "pump/T2_ONtime") {
+        } else if (eventName === "pump/T2_ONtime") {
             getPumpOfDevice(device).ONtime = Math.abs(value / 1000);
-        } else if (name === "pump/CurrentDutyCycle") {
+        } else if (eventName === "pump/CurrentDutyCycle") {
             getPumpOfDevice(device).duty = value / 1000;
-        } else if (name === "pump/endCycle") {
+        } else if (eventName === "pump/endCycle") {
             const pump = getPumpOfDevice(device);
             pump.volume += pump.ONtime * pump.capacity_gph / 3600;
             pumps.forEach(function (pump) {
@@ -346,9 +354,9 @@ exports.Dashboard = function (config, WebSocketClient) {
                     event.object = extendPump(pump);
                 }
             });
-        } else if (name === "pump/warningRunTooLong") {
+        } else if (eventName === "pump/warningRunTooLong") {
             getPumpOfDevice(device).run2long = true;
-        } else if (name === "pump/debutDeCoulee") {
+        } else if (eventName === "pump/debutDeCoulee") {
             const pump = getPumpOfDevice(device);
             pump.couleeEnCour = true;
             pump.debutDeCouleeTS = data.timestamp;
@@ -357,7 +365,7 @@ exports.Dashboard = function (config, WebSocketClient) {
                 pump.lastUpdatedAt = event.published_at;
                 event.object = extendPump(pump);
             }
-        } else if (name === "pump/finDeCoulee") {
+        } else if (eventName === "pump/finDeCoulee") {
             const pump = getPumpOfDevice(device);
             pump.couleeEnCour = false;
             if (pump.device === device.name) {
@@ -368,19 +376,19 @@ exports.Dashboard = function (config, WebSocketClient) {
             pump.duty = 0;
             pump.volume = 0;
 
-        } else if (name === "sensor/Valve1Pos") {
+        } else if (eventName === "sensor/Valve1Pos") {
             const valve = getValveOfDevice(device, 1);
             if (valve.device === device.name) {
                 valve.position = positionCode[value];
                 event.object = extendValve(valve);
             }
-        } else if (name === "sensor/Valve2Pos") {
+        } else if (eventName === "sensor/Valve2Pos") {
             const valve = getValveOfDevice(device, 2);
             if (valve.device === device.name) {
                 valve.position = positionCode[value];
                 event.object = extendValve(valve);
             }
-        } else if (name === "sensor/level") {
+        } else if (eventName === "sensor/level") {
             tanks.forEach(function (tank) {
                 if (tank.device === device.name) {
                     tank.rawValue = value;
@@ -388,24 +396,25 @@ exports.Dashboard = function (config, WebSocketClient) {
                     event.object = extendTank(tank);
                 }
             });
-        } else if (name === "device/boot") {
+        } else if (eventName === "device/boot") {
             // TODO Ignored
-        } else if (name === "device/NewGenSN") {
+        } else if (eventName === "device/NewGenSN") {
             // TODO Ignored
-        } else if (name === "sensor/openSensorV1") {
+        } else if (eventName === "sensor/openSensorV1") {
             // TODO Ignored
-        } else if (name === "sensor/closeSensorV1") {
+        } else if (eventName === "sensor/closeSensorV1") {
             // TODO Ignored
-        } else if (name === "sensor/openSensorV2") {
+        } else if (eventName === "sensor/openSensorV2") {
             // TODO Ignored
-        } else if (name === "sensor/closeSensorV2") {
+        } else if (eventName === "sensor/closeSensorV2") {
             // TODO Ignored
-        } else if (name === "sensor/outOfRange") {
+        } else if (eventName === "sensor/outOfRange") {
             // TODO Ignored
-        } else if (name === "sensor/sensorTemp") {
+        } else if (eventName === "sensor/sensorTemp") {
             // TODO Ignored
         } else {
-            console.warn("Unknown event name from %s: %s", device.name, name, event);
+            console.warn("Unknown event eventName from %s: %s", device.name, eventName, event);
+
         }
         return publishData(event, device);
     }
