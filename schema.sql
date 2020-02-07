@@ -55,6 +55,7 @@ CREATE TABLE cycles (
    rate FLOAT,
    dutycycle FLOAT,
    pump_on_time FLOAT,
+   pump_off_time FLOAT,
    volume_total FLOAT
 );
 CREATE TABLE coulee (

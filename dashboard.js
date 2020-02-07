@@ -342,6 +342,8 @@ exports.Dashboard = function (config, WebSocketClient) {
             getPumpOfDevice(device).update(event, value);
         } else if (eventName === "pump/T2_ONtime") {
             getPumpOfDevice(device).ONtime = Math.abs(value / 1000);
+        } else if (eventName === "pump/T1_OFFtime") {
+            getPumpOfDevice(device).OFFtime = Math.abs(value / 1000);
         } else if (eventName === "pump/CurrentDutyCycle") {
             getPumpOfDevice(device).duty = value / 1000;
         } else if (eventName === "pump/endCycle") {
@@ -580,7 +582,8 @@ exports.Dashboard = function (config, WebSocketClient) {
 
     function extendPump(pump) {
         pump = _.extend({}, pump);
-        pump.T2ONtime = pump.ONtime;
+        // pump.T2ONtime = pump.ONtime;
+        // pump.T1OFFtime = pump.OFFtime;
         return pump;
     }
 

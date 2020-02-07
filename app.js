@@ -113,11 +113,12 @@ function insertData(db, event, device) {
         if (event.object) {
             const dutycycle = event.data.eData / 1000;
             const rate = event.object.capacity_gph * event.object.duty;
-            const ONtime = Math.abs(event.object.T2ONtime);
+            const ONtime = Math.abs(event.object.ONtime);
+            const OFFtime = Math.abs(event.object.OFFtime);
             const volume_gal = ONtime * event.object.capacity_gph / 3600;
             const volume_total = event.object.volume;
-            const sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, volume_gal, volume_total, dutycycle, rate];
+            const sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, pump_off_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, OFFtime, volume_gal, volume_total, dutycycle, rate];
             return runSql(sql, params);
         } else {
             console.warn(util.format("Got pump/endCycle from device %s, but pump is undefined", event.coreid), event);
@@ -225,13 +226,14 @@ function startApp(db) {
         res.setHeader("Content-Type", "text/plain");
         return new Promise(function (complete, reject) {
             try {
-                res.write("device_id \tdevice_name \tend_time \tpump_on_time(sec) \tvolume \tdutycycle \trate" + '\n');
+                res.write("device_id \tdevice_name \tend_time \tpump_on_time(sec) \tpump_off_time(sec) \tvolume \tdutycycle \trate" + '\n');
                 const sql = "select * from cycles";
                 for (const row of db.prepare(sql).iterate()) {
                     res.write(row.device_id + '\t');
                     res.write(row.device_name + '\t');
                     res.write(moment(row.end_time).format("YYYY-MM-DD HH:mm:ss") + '\t');
                     res.write(row.pump_on_time + '\t');
+                    res.write(row.pump_off_time + '\t');
                     res.write(row.volume + '\t');
                     res.write(row.dutycycle + '\t');
                     res.write(row.rate + '\t');

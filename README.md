@@ -10,7 +10,7 @@ Assuming NPM is already installed:
 
 ## 2. Create SQLite Database
 
-    sqlite3 data.sqlite3 < schema.sql
+    sqlite3 data/db.sqlite3 < data/schema.sql
 
 ## 3. Configure
 
