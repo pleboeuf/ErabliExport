@@ -64,6 +64,5 @@ CREATE TABLE coulee (
    start_stop_time timestamp,
    temps_debut_fin datetime,
    event_type VARCHAR(8),
-   volume FLOAT,
    volume_total FLOAT
 );

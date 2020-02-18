@@ -128,7 +128,7 @@ function insertData(db, event, device) {
     } else if (eventName === "pump/debutDeCoulee" || eventName === "pump/finDeCoulee") {
         const volume_gal = event.object.volume;
         const eventType = (event.data.eData === 1) ? "start" : "stop";
-        const sql = "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume) VALUES (?, ?, ?, ?, ?, ?)";
+        const sql = "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume_total) VALUES (?, ?, ?, ?, ?, ?)";
         const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, volume_gal];
         return runSql(sql, params);
         // Handle "sensor/level" events
