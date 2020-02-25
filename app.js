@@ -144,25 +144,26 @@ function insertData(db, event, device) {
             return Promise.resolve();
         }
     } else if (eventName === "sensor/vacuum") {
-        const mm_hg = event.data.eData / 100;
-        const sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, mm_hg ) VALUES (?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), mm_hg];
+        const in_hg = event.data.eData / 100;
+        const sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, in_hg ) VALUES (?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), in_hg];
         return runSql(sql, params);
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
  		const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
         sensors.forEach (function(sensor) {
             const line_name = sensor.code;
-            const mm_hg = data[sensor.inputName];
+            const in_hg = data[sensor.inputName];
             const temp = data["temp"];
+            const bat_temp = data["batTemp"];
             const Vin = data["Vin"];
             const light = data["li"];
             const soc = data["soc"];
             const volt = data["volt"];
             const rssi = data["rssi"];
             const qual = data["qual"];
-            const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin];
+            const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, in_hg, temp, bat_temp,light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, in_hg, temp, bat_temp, light, soc, volt, rssi, qual, Vin];
             runSql(sql, params);
         });
 		return Promise.resolve();

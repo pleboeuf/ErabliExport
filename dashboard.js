@@ -328,6 +328,7 @@ exports.Dashboard = function (config, WebSocketClient) {
                 sensor.rawValue = data[sensor.inputName] * 100;
                 sensor.lastUpdatedAt = event.published_at;
                 sensor.temp = data["temp"];
+                sensor.bat_temp = data["batTemp"];
                 sensor.lightIntensity = data["li"];
                 sensor.percentCharge = data["soc"];
                 sensor.batteryVolt = data["volt"];
