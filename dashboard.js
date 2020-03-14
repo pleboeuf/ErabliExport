@@ -332,6 +332,8 @@ exports.Dashboard = function (config, WebSocketClient) {
                 sensor.lightIntensity = data["li"];
                 sensor.percentCharge = data["soc"];
                 sensor.batteryVolt = data["volt"];
+                sensor.rssi = data["rssi"];
+                sensor.signalQual = data["qual"];
             });
         } else if (eventName === "pump/T1") {
             getPumpOfDevice(device).update(event, value);
