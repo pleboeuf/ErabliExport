@@ -10,6 +10,26 @@ const chalk = require('chalk');
 const dbFile = ExportConfig.database || 'data.sqlite3';
 const util = require('util');
 const nodeArg = process.argv;
+const Influx = require("influx");
+const influx = new Influx.InfluxDB({
+    host: ExportConfig['influxdb']['host'],
+    port: ExportConfig['influxdb']['port'],
+    database: ExportConfig['influxdb']['database'],
+    username: ExportConfig['influxdb']['username'],
+    password: ExportConfig['influxdb']['password'],
+    schema: [
+        {
+          measurement: 'Reservoirs',
+          fields: {
+            fill_gallons: Influx.FieldType.INTEGER
+          },
+          tags: [
+            'deviceId',
+            'deviceName'
+          ]
+        }
+      ]
+    });
 
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
@@ -180,6 +200,169 @@ function insertData(db, event, device) {
     }
 }
 
+function insertInflux(influx, event, device) {
+    const deviceId = event.coreid;
+    const deviceName = device.name;
+    var eventName = event.data.eName;
+    var publishDate;
+    // console.log("got event " + eventName + " from device: " + deviceName, event);
+
+    if (!eventName){
+    //     if (device.eventName) {
+    //         event.data.eName = device.eventName;
+    //         eventName = event.data.eName;
+    //         console.log(util.format("(Dashboard) Overriding event name to %s for device %s", device.eventName, device.id));
+    //     } else {
+    //         event.data.eName =  "Vacuum/Lignes";
+    //         eventName = event.data.eName;
+    //         console.log(util.format("(Dashboard) Overriding event name from DB to 'Vacuum/Lignes' for device %s", device.id));
+    //     }
+    }
+
+    if (eventName === "Vacuum/Lignes") {
+    //     publishDate = new Date(event.published_at).getTime();
+    // } else {
+    //     publishDate = 1000 * event.data.timestamp + event.data.timer % 1000;
+    }
+
+    // Handle pump start/stop events
+    if (event.data.eName === "pump/T1" || event.data.eName === "pump/T2") {
+	// 	const pump_state = event.data.eData;
+    //     const eventType = (event.data.eData === 0) ? "start" : "stop";
+    //     const dev_timer = event.data.timer;
+    //     const sql = "INSERT INTO pumps (device_id, device_name, published_at, dev_timer, temps_mesure, event_type, pump_state) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    //     const params = [deviceId, deviceName, publishDate, dev_timer, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, pump_state];
+    //     return runSql(sql, params);
+
+    //     // Handle fin de cycle events
+    } else if (eventName === "pump/endCycle") {
+        if (event.object) {
+            var dutycycle = event.data.eData / 1000;
+            var rate = event.object.capacity_gph * event.object.duty;
+            var ONtime = Math.abs(event.object.ONtime);
+            // const OFFtime = Math.abs(event.object.OFFtime);
+            // const volume_total = event.object.volume;
+            var volume_gal = ONtime * event.object.capacity_gph / 3600;
+            var point = [{
+                measurement: "Cycles",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    },
+                    fields: {
+                        debit: rate,
+                        volume: volume_gal
+                    }
+                }];
+                influx.writePoints(point).then(() => console.log("Cycles ok"), (e) => console.error(event.object, e));
+            // const sql = "INSERT INTO cycles (device_id, device_name, end_time, fin_cycle, pump_on_time, pump_off_time, volume, volume_total, dutycycle, rate) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            // const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), ONtime, OFFtime, volume_gal, volume_total, dutycycle, rate];
+            // return runSql(sql, params);
+            
+        } else {
+            // console.warn(util.format("Got pump/endCycle from device %s, but pump is undefined", event.coreid), event);
+            // return Promise.resolve();
+        }
+    //     // Handle "pump/debutDeCoulee" and "pump/finDeCoulee" events
+    } else if (eventName === "pump/debutDeCoulee" || eventName === "pump/finDeCoulee") {
+    //     const volume_gal = event.object.volume;
+    //     const eventType = (event.data.eData === 1) ? "start" : "stop";
+    //     const sql = "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume_total) VALUES (?, ?, ?, ?, ?, ?)";
+    //     const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), eventType, volume_gal];
+    //     return runSql(sql, params);
+    
+    // Handle "sensor/level" events    
+    } else if (eventName === "sensor/level") {       
+        if (event.object) {
+            var fill_gallons = liters2gallons(event.object.fill);
+            var fill_percent = event.object.fill / event.object.capacity;
+            publishDate = (event.data.timestamp + event.data.timer % 1000);
+            if (fill_gallons !== 'NaNi' || fill_gallons !== undefined){
+                var point = [{
+                    measurement: "Reservoirs",
+                    tags: {
+                        deviceId: deviceId,
+                        deviceName: deviceName,
+                    },
+                    fields: {
+                        fill_gallons: fill_gallons
+                    }
+                    // timestamp: {
+                    //     publishDate
+                    // }
+                }];
+                influx.writePoints(point).then(() => console.log("Reservoirs ok"), (e) => console.error(event.object, e));
+                }   
+        } else {
+            console.warn(util.format("Got sensor/level from device %s, but tank is undefined", event.coreid), event);
+            return Promise.resolve();
+        }
+    } else if (eventName === "sensor/vacuum") {
+        // const sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, in_hg ) VALUES (?, ?, ?, ?, ?)";
+        // const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), in_hg];
+        // return runSql(sql, params);
+        const in_hg = event.data.eData / 100;
+        var point = [{
+            measurement: "Vacuum",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                },
+                fields: {
+                    pump_vacuum: in_hg
+                }
+            }];
+            influx.writePoints(point).then(() => console.log("Vacuum ok"), (e) => console.error(event.object, e));
+
+    } else if (eventName === "Vacuum/Lignes") {
+        const data = event.data;
+ 		const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
+        sensors.forEach (function(sensor) {
+            const line_name = sensor.code;
+            const in_hg = data[sensor.inputName];
+            const temp = data["temp"];
+            const bat_temp = data["batTemp"];
+            // const Vin = data["Vin"];
+            const light = data["li"];
+            // const soc = data["soc"];
+            // const volt = data["volt"];
+            // const rssi = data["rssi"];
+            // const qual = data["qual"];
+                var point = [{
+                    measurement: "Vacuum",
+                    tags: {
+                        deviceId: deviceId,
+                        deviceName: deviceName,
+                        line_name: line_name
+                        },
+                        fields: {
+                            vacuum: in_hg,
+                            temp: temp,
+                            battery_temp: bat_temp,
+                            light:  light
+                        }
+                    }];
+                    influx.writePoints(point).then(() => console.log("Vacuum ok"), (e) => console.error(event.object, e));
+
+//             const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, in_hg, temp, bat_temp,light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+//             const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, in_hg, temp, bat_temp, light, soc, volt, rssi, qual, Vin];
+//             runSql(sql, params);
+        });
+// 		return Promise.resolve();
+    } else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
+//         const valve_name = event.object.code;
+//         const position = event.object.position;
+        // const posToCode = {"Fermé": 0, "Ouvert": 1, "Ouverte": 1, "Partiel": 2, "Erreur": 3};
+//         const position_code = posToCode[position];
+//         const sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position, position_code ) VALUES (?, ?, ?, ?, ?, ?, ?)";
+//         const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position, position_code];
+//         return runSql(sql, params);
+//     } else {
+//         return Promise.resolve();
+//     }
+    }
+}
+
 function startApp(db) {
     const http = require('http');
     const port = ExportConfig.port || '3003';
@@ -273,6 +456,7 @@ function startApp(db) {
 
     const server = http.createServer(app);
     dashboard.onChange(function (data, event, device) {
+        insertInflux(influx, event, device);
         return insertData(db, event, device);
     });
     server.listen(port);

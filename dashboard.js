@@ -28,6 +28,7 @@ var HorizontalCylindricTank = function (self) {
     };
     self.getFill = function () {
         var h = self.sensorHeight - self.rawValue;
+        h = (h <= 0 ? 0 : h);
         return HorizontalCylindricTank.getFill(h, self.diameter, self.length);
     }
 };
@@ -50,6 +51,7 @@ var UShapedTank = function (self) {
 
     function getFill(level) {
         // All measures in millimeters
+        level = (level <= 0 ? 0 : level);
         return getBottomFill(level) + getTopFill(level);
     }
 
@@ -246,14 +248,33 @@ exports.Dashboard = function (config, WebSocketClient) {
         return sensor;
     }
 
-    function getVacuumSensorOfLineVacuumDevice(device) {
+    // function getAllVacuumSensorOfLineVacuumDevice(device) {
+    //     var sensor = vacuumSensors.filter(function (sensor) {
+    //         return sensor.device === device.name;
+    //     });
+    //     if (sensor === undefined) {
+    //         throw "Device " + device.name + " has no vacuum sensor on input: ";
+    //     }
+    //     return sensor;
+    // }
+
+    function getVacuumSensorOfLineVacuumDevice(device, input) {
         var sensor = vacuumSensors.filter(function (sensor) {
             return sensor.device === device.name;
         });
         if (sensor === undefined) {
-            throw "Device " + device.name + " has no vacuum sensor on input: " + input;
+            if (input === undefined){
+                throw "Device " + device.name + " has no vacuum sensor on input: ";
+            } else {
+                throw "Device " + device.name + " has no vacuum sensor on input: " + input;
+            }
         }
-        return sensor;
+        if (input === undefined){
+            return sensor;
+        } else {
+            return sensor[input];            
+        }
+ 
     }
 
     function getVacuumSensorByCode(code) {
@@ -323,18 +344,21 @@ exports.Dashboard = function (config, WebSocketClient) {
             sensor.rawValue = value;
             sensor.lastUpdatedAt = event.published_at;
         } else if (eventName === "Vacuum/Lignes") {
-            const sensors = getVacuumSensorOfLineVacuumDevice(device);
-            sensors.forEach(function(sensor){
-                sensor.rawValue = data[sensor.inputName] * 100;
-                sensor.lastUpdatedAt = event.published_at;
-                sensor.temp = data["temp"];
-                sensor.bat_temp = data["batTemp"];
-                sensor.lightIntensity = data["li"];
-                sensor.percentCharge = data["soc"];
-                sensor.batteryVolt = data["volt"];
-                sensor.rssi = data["rssi"];
-                sensor.signalQual = data["qual"];
-            });
+            for (var i = 0; i < 4; i++) {
+                var sensor = getVacuumSensorOfLineVacuumDevice(device, i);
+                if (sensor !== undefined) {
+                    sensor.rawValue = data[sensor.inputName] * 100;
+                    sensor.lastUpdatedAt = event.published_at;
+                    sensor.temp = data["temp"];
+                    sensor.lightIntensity = data["li"];
+                    sensor.percentCharge = data["soc"];
+                    sensor.batteryVolt = data["volt"];
+                    sensor.rssi = data["rssi"];
+                    sensor.signalQual = data["qual"];
+                } else {
+                    break;
+                }
+            }
         } else if (eventName === "pump/T1") {
             getPumpOfDevice(device).update(event, value);
         } else if (eventName === "pump/T2") {
