@@ -124,8 +124,8 @@ var Pump = exports.Pump = function (pumpConfig) {
         }
     };
     self.cycleEnded = function (t0Event, t1Event, t2Event) {
-        self.duty = (t2Event.timer - t1Event.timer) / (t2Event.timer - t0Event.timer);
-        // console.log("Pump cycle ended: " + (t1Event.timer - t0Event.timer) + " ms off, then " + (t2Event.timer - t1Event.timer) + " ms on (" + (self.duty * 100).toFixed(0) + "% duty)");
+        // self.duty = (t2Event.timer - t1Event.timer) / (t2Event.timer - t0Event.timer);
+        console.log("Pump " + self.device + " cycle ended: " + (t1Event.timer - t0Event.timer) + " ms off, then " + (t2Event.timer - t1Event.timer) + " ms on (" + (self.duty * 100).toFixed(0) + "% duty)");
     }
 };
 
@@ -247,16 +247,6 @@ exports.Dashboard = function (config, WebSocketClient) {
         }
         return sensor;
     }
-
-    // function getAllVacuumSensorOfLineVacuumDevice(device) {
-    //     var sensor = vacuumSensors.filter(function (sensor) {
-    //         return sensor.device === device.name;
-    //     });
-    //     if (sensor === undefined) {
-    //         throw "Device " + device.name + " has no vacuum sensor on input: ";
-    //     }
-    //     return sensor;
-    // }
 
     function getVacuumSensorOfLineVacuumDevice(device, input) {
         var sensor = vacuumSensors.filter(function (sensor) {

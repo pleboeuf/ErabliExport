@@ -67,3 +67,7 @@ CREATE TABLE coulee (
    event_type VARCHAR(8),
    volume_total FLOAT
 );
+CREATE TABLE saison (
+   debut datetime,
+   fin datetime
+);
