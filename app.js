@@ -3,6 +3,7 @@ const moment = require('moment');
 const Promise = require('promise');
 const readFile = Promise.denodeify(fs.readFile);
 const WebSocketClient = require('websocket').client;
+const Schema = require('./influxdbSchema.json');
 const ExportConfig = require('./config.json');
 const config = require(ExportConfig.dashboardConfig.filename);
 const sqlite3 = require('better-sqlite3');
@@ -17,6 +18,7 @@ const influx = new Influx.InfluxDB({
     database: ExportConfig['influxdb']['database'],
     username: ExportConfig['influxdb']['username'],
     password: ExportConfig['influxdb']['password']
+    // schema: Schema
     // schema: [
     //     {
     //       measurement: 'Reservoirs',
@@ -61,7 +63,7 @@ function liters2gallons(liters) {
     return Math.ceil(liters / 4.54609188);
 }
 
-const dashboard = require('./dashboard.js').Dashboard(config, WebSocketClient);
+const dashboard = require('../ErabliDash/dashboard.js').Dashboard(config, WebSocketClient);
 dashboard.init().then(function () {
     return dashboard.connect(function () {
         // Connected or re-connected
@@ -211,24 +213,6 @@ function insertInflux(influx, event, device) {
         var publishDate = 1000000 * (1000 * event.data.timestamp + event.data.timer % 1000);        
     }
 
-    // Handle pump start/stop events
-    // if (event.data.eName === "sensor/US100sensorTemp" || event.data.eName === "sensor/enclosureTemp" || event.data.eName === "sensor/ambientTemp") {
-	// 	const temp = event.data.eData;
-    //     var point = [{
-    //         measurement: "Temperature",
-    //         tags: {
-    //             deviceId: deviceId,
-    //             deviceName: deviceName,
-    //         },
-    //         fields: {
-    //             temp_us100: temp
-    //             temp_case: temp
-    //             temp_ext: temp
-    //         },
-    //         timestamp: publishDate
-    //     }];
-    //     return influx.writePoints(point).then(() => console.log("Influx-> Temperature " + deviceName + " " + eventType + " " + publishDate), (e) => console.error(event.object, e));
-
     //     // Handle fin de cycle events
     if (eventName === "pump/endCycle") {
         if (event.object) {
@@ -321,7 +305,7 @@ function insertInflux(influx, event, device) {
         return influx.writePoints(point).then(() => console.log("Influx-> Vacuum " + deviceName + " " + in_hg + " " + publishDate), (e) => console.error(event.object, e));
 
        // Handle "Vacuum/Lignes" events
-} else if (eventName === "Vacuum/Lignes") {
+    } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
         const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
         publishDate = new Date(event.published_at).getTime();
@@ -372,13 +356,159 @@ function insertInflux(influx, event, device) {
                 deviceName: deviceName,
                 valve_name: valve_name
                 },
+            fields: {
+                position: position,
+                pos_code: position_code
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Valve " + deviceName + " " + valve_name + " " + position + " " + publishDate), (e) => console.error(event.object, e));
+    // Handle "Osmose/Start", "Osmose/Stop"
+    } else if (eventName === "Osmose/Start") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const state = osmData.state;
+        const alarmNo = osmData.alarmNo;
+        const sequence = osmData.sequence;
+        const debut = osmData.startStopTime;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {
+                state: state ? "run":"stop",
+                alarmNo: alarmNo,
+                sequence: sequence,
+                debut: debut
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Osmose start " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    }else if (eventName === "Osmose/Stop") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const state = osmData.state;
+        const alarmNo = osmData.alarmNo;
+        const sequence = osmData.sequence;
+        const runTimeSec = osmData.runTimeSec;
+        const fin = osmData.startStopTime;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {
+                state: state ? "run":"stop",
+                alarmNo: alarmNo,
+                sequence: sequence,
+                duree: runTimeSec,
+                fin: fin
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Osmose stop " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/alarm") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const alarmNo = osmData.alarmNo;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
                 fields: {
-                    position: position,
-                    pos_code: position_code
+                    alarmNo: alarmNo
                 },
                 timestamp: publishDate
             }];
-            return influx.writePoints(point).then(() => console.log("Influx-> Valve " + deviceName + " " + valve_name + " " + position + " " + publishDate), (e) => console.error(event.object, e));
+        // Save only real alarm
+        if (alarmNo < 0) {
+            return influx.writePoints(point).then(() => console.log("Influx-> osmose alarm " + fonction + " alarm no:" + alarmNo + " " + publishDate), (e) => console.error(osmData, e));
+        } else {
+            return Promise.resolve();
+        }
+        // return influx.writePoints(point).then(() => console.log("Influx-> osmose alarm " + fonction + " alarm no:" + alarmNo + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/operData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                Col1_gpm: osmData.Col1,
+                Col2_gpm: osmData.Col2,
+                Col3_gpm: osmData.Col3,
+                Col4_gpm: osmData.Col4,
+                Conc_gpm: osmData.Conc,
+                temp_f: osmData.Temp,
+                pression: osmData.Pres,
+                sequence: osmData.sequence,
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> osmose operData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/concData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const sequence = osmData.sequence;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                brix_seve: osmData.BrixSeve,
+                brix_conc: osmData.BrixConc
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> osmose concData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/summaryData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const sequence = osmData.sequence;
+        const pc_conc = osmData.PC_Conc;
+        const gph_conc = osmData.Conc_GPH;
+        const gph_filt = osmData.Filtrat_GPH;
+        const gph_tot = osmData.Total_GPH;
+        const sumData = pc_conc + gph_conc + gph_filt + gph_tot;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                pc_conc: pc_conc,
+                gph_conc: gph_conc,
+                gph_filt: gph_filt,
+                gph_tot: gph_tot,
+                duree: osmData.runTimeSec,
+                sequence: sequence,
+            },
+            timestamp: publishDate
+        }];
+        // Save the data only if its greater than zero
+        if (sumData > 0) {
+            return influx.writePoints(point).then(() => console.log("Influx-> osmose summaryData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+        } else {
+            return Promise.resolve();
+        }
+        // return influx.writePoints(point).then(() => console.log("Influx-> osmose summaryData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
     } else {
         return Promise.resolve();
     }

@@ -106,25 +106,27 @@
          "timestamp": "timestamp"
    },
 
-
    {
       "measurement": "Osmose",
          "tags": {
             "deviceId": "Influx.FieldType.STRING",
             "deviceName": "Influx.FieldType.STRING",
-            "mode": "Influx.FieldType.STRING"
+            "fonction": "Influx.FieldType.STRING"
          },
          "fields": {
             "debut": "timestamp",
             "fin": "timestamp",
+            "state": "Influx.FieldType.INTEGER",
+            "alarmNo": "Influx.FieldType.INTEGER",
+            "sequence": "Influx.FieldType.STRING",
             "duree": "Influx.FieldType.FLOAT",
             "brix_seve": "Influx.FieldType.FLOAT",
             "brix_conc": "Influx.FieldType.FLOAT",
-            "gpm_1": "Influx.FieldType.FLOAT",
-            "gpm_2": "Influx.FieldType.FLOAT",
-            "gpm_3": "Influx.FieldType.FLOAT",
-            "gpm_4": "Influx.FieldType.FLOAT",
-            "gpm_5": "Influx.FieldType.FLOAT",
+            "Col1_gpm": "Influx.FieldType.FLOAT",
+            "Col2_gpm": "Influx.FieldType.FLOAT",
+            "Col3_gpm": "Influx.FieldType.FLOAT",
+            "Col4_gpm": "Influx.FieldType.FLOAT",
+            "Conc_gpm": "Influx.FieldType.FLOAT",
             "temp_f": "Influx.FieldType.FLOAT",
             "pression": "Influx.FieldType.FLOAT",
             "pc_conc": "Influx.FieldType.FLOAT",
@@ -134,5 +136,4 @@
          },
          "timestamp": "timestamp"
    }
-
 ]
