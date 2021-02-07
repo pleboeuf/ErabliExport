@@ -9,6 +9,7 @@
     "better-sqlite3": "^5.4.0",
     "chalk": "^2.4.2",
     "express": "^4.16.4",
+    "influx": "^5.5.1",
     "moment": "^2.24.0",
     "promise": "^8.0.2",
     "underscore": "^1.9.1",

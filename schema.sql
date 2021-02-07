@@ -29,7 +29,7 @@ CREATE TABLE vacuum (
    device_name VARCHAR(24),
    published_at timestamp,
    temps_mesure datetime,
-   mm_hg FLOAT
+   in_hg FLOAT
 );
 CREATE TABLE linevacuum (
    device_id VARCHAR(24),
@@ -37,8 +37,9 @@ CREATE TABLE linevacuum (
    published_at timestamp,
    line_name VARCHAR(24),
    temps_mesure datetime,
-   mm_hg FLOAT,
+   in_hg FLOAT,
    temp FLOAT,
+   bat_temp FLOAT,
    light INTEGER,
    soc FLOAT,
    volt FLOAT,
@@ -65,4 +66,8 @@ CREATE TABLE coulee (
    temps_debut_fin datetime,
    event_type VARCHAR(8),
    volume_total FLOAT
+);
+CREATE TABLE saison (
+   debut datetime,
+   fin datetime
 );

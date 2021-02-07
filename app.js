@@ -3,6 +3,7 @@ const moment = require('moment');
 const Promise = require('promise');
 const readFile = Promise.denodeify(fs.readFile);
 const WebSocketClient = require('websocket').client;
+const Schema = require('./influxdbSchema.json');
 const ExportConfig = require('./config.json');
 const config = require(ExportConfig.dashboardConfig.filename);
 const sqlite3 = require('better-sqlite3');
@@ -10,6 +11,27 @@ const chalk = require('chalk');
 const dbFile = ExportConfig.database || 'data.sqlite3';
 const util = require('util');
 const nodeArg = process.argv;
+const Influx = require("influx");
+const influx = new Influx.InfluxDB({
+    host: ExportConfig['influxdb']['host'],
+    port: ExportConfig['influxdb']['port'],
+    database: ExportConfig['influxdb']['database'],
+    username: ExportConfig['influxdb']['username'],
+    password: ExportConfig['influxdb']['password']
+    // schema: Schema
+    // schema: [
+    //     {
+    //       measurement: 'Reservoirs',
+    //       fields: {
+    //         fill_gallons: Influx.FieldType.INTEGER
+    //       },
+    //       tags: [
+    //         'deviceId',
+    //         'deviceName'
+    //       ]
+    //     }
+    //   ]
+    });
 
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
@@ -41,7 +63,7 @@ function liters2gallons(liters) {
     return Math.ceil(liters / 4.54609188);
 }
 
-const dashboard = require('./dashboard.js').Dashboard(config, WebSocketClient);
+const dashboard = require('../ErabliDash/dashboard.js').Dashboard(config, WebSocketClient);
 dashboard.init().then(function () {
     return dashboard.connect(function () {
         // Connected or re-connected
@@ -144,25 +166,26 @@ function insertData(db, event, device) {
             return Promise.resolve();
         }
     } else if (eventName === "sensor/vacuum") {
-        const mm_hg = event.data.eData / 100;
-        const sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, mm_hg ) VALUES (?, ?, ?, ?, ?)";
-        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), mm_hg];
+        const in_hg = event.data.eData / 100;
+        const sql = "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, in_hg ) VALUES (?, ?, ?, ?, ?)";
+        const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), in_hg];
         return runSql(sql, params);
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
  		const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
         sensors.forEach (function(sensor) {
             const line_name = sensor.code;
-            const mm_hg = data[sensor.inputName];
+            const in_hg = data[sensor.inputName];
             const temp = data["temp"];
+            const bat_temp = data["batTemp"];
             const Vin = data["Vin"];
             const light = data["li"];
             const soc = data["soc"];
             const volt = data["volt"];
             const rssi = data["rssi"];
             const qual = data["qual"];
-            const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, mm_hg, temp, light, soc, volt, rssi, qual, Vin];
+            const sql = "INSERT INTO linevacuum (device_id, device_name, published_at, temps_mesure, line_name, in_hg, temp, bat_temp,light, soc, volt, rssi, qual, Vin ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), line_name, in_hg, temp, bat_temp, light, soc, volt, rssi, qual, Vin];
             runSql(sql, params);
         });
 		return Promise.resolve();
@@ -174,6 +197,318 @@ function insertData(db, event, device) {
         const sql = "INSERT INTO valves (device_id, device_name, published_at, temps_mesure, valve_name, position, position_code ) VALUES (?, ?, ?, ?, ?, ?, ?)";
         const params = [deviceId, deviceName, publishDate, moment(publishDate).format("YYYY-MM-DD HH:mm:ss"), valve_name, position, position_code];
         return runSql(sql, params);
+    } else {
+        return Promise.resolve();
+    }
+}
+
+function insertInflux(influx, event, device) {
+    const deviceId = event.coreid;
+    const deviceName = device.name;
+    var eventName = event.data.eName;
+
+    if (event.data.timer === undefined) {
+        var publishDate = (1000000000 * event.data.timestamp);
+    } else {
+        var publishDate = 1000000 * (1000 * event.data.timestamp + event.data.timer % 1000);        
+    }
+
+    //     // Handle fin de cycle events
+    if (eventName === "pump/endCycle") {
+        if (event.object) {
+            const dutycycle = event.data.eData / 1000;
+            // const rateIn =  event.object.pump_off_time;
+            const rateOut = event.object.capacity_gph * event.object.duty;
+            const ONtime = Math.abs(event.object.ONtime);
+            const OFFtime = Math.abs(event.object.OFFtime);
+            // const volume_total = event.object.volume;
+            const volume_gal = ONtime * event.object.capacity_gph / 3600;
+            const point = [{
+                measurement: "Cycles",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                },
+                fields: {
+                    // debit_in: rateIn,
+                    debit_out: rateOut,
+                    volume: volume_gal,
+                    dutycycle: dutycycle,
+                    ON_time: ONtime,
+                    OFF_time: OFFtime
+                },
+                timestamp: publishDate
+            }];
+            return influx.writePoints(point).then(() => console.log("Influx-> Cycles ok " + " " + publishDate), (e) => console.error(event.object, e))           
+        } else {
+            console.warn(util.format("Got pump/endCycle from device %s, but pump is undefined", event.coreid), event);
+            return Promise.resolve();
+        }
+    //     // Handle "pump/debutDeCoulee" and "pump/finDeCoulee" events
+    } else if (eventName === "pump/debutDeCoulee" || eventName === "pump/finDeCoulee") {
+        const volume_gal = event.object.volume;
+        const eventType = (event.data.eData === 1) ? "start" : "stop";
+        const point = [{
+            measurement: "Coulee",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                etat: eventType
+            },
+            fields: {                
+                etat_num: event.data.eData,
+                volume_total: volume_gal
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Coulée " + deviceName + " " + eventType + " " + publishDate), (e) => console.error(event.object, e));
+    
+    // Handle "sensor/level" events    
+    } else if (eventName === "sensor/level") {       
+        if (event.object) {
+            const fill_gallons = liters2gallons(event.object.fill);
+            const fill_percent = event.object.fill / event.object.capacity;
+            if (fill_gallons !== 'NaN' || fill_gallons !== undefined){
+                var point = [{
+                    measurement: "Reservoirs",
+                    tags: {
+                        deviceId: deviceId,
+                        deviceName: deviceName,
+                    },
+                    fields: {
+                        fill_gallons: fill_gallons,
+                        fill_percent: fill_percent
+                    },
+                    timestamp: publishDate
+                }];
+                return influx.writePoints(point).then(() => console.log("Influx-> Reservoirs " + deviceName + " " + fill_gallons + " gal" + " " + publishDate), (e) => console.error(event.object, e));
+            }   
+        } else {
+            console.warn(util.format("Got sensor/level from device %s, but tank is undefined", event.coreid), event);
+            return Promise.resolve();
+        }
+
+    // Handle "sensor/vacuum" events
+    } else if (eventName === "sensor/vacuum") {        
+        const in_hg = event.data.eData / 100;
+        const point = [{
+            measurement: "Vacuum",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+            },
+            fields: {
+                vacuum: in_hg
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Vacuum " + deviceName + " " + in_hg + " " + publishDate), (e) => console.error(event.object, e));
+
+       // Handle "Vacuum/Lignes" events
+    } else if (eventName === "Vacuum/Lignes") {
+        const data = event.data;
+        const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
+        publishDate = new Date(event.published_at).getTime();
+        sensors.forEach (function(sensor) {
+            const line_name = sensor.code;
+            const in_hg = data[sensor.inputName];
+            const temp = data["temp"];
+            const bat_temp = data["batTemp"];
+            const Vin = data["Vin"];
+            const light = data["li"];
+            const soc = data["soc"];
+            const volt = data["volt"];
+            const rssi = data["rssi"];
+            const qual = data["qual"];
+            var point = [{
+                measurement: "Vacuum_ligne",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    line_name: line_name
+                },
+                fields: {
+                    vacuum: in_hg,
+                    ext_temp: temp,
+                    bat_temp: bat_temp,
+                    light: light,
+                    Vin: Vin,
+                    soc: soc,
+                    bat_volt: volt,
+                    rssi: rssi,
+                    sig_gual: qual
+                },
+                timestamp: publishDate
+            }];
+            return influx.writePoints(point).then(() => console.log("Influx-> Vacuum " + line_name + " " + in_hg + " " + publishDate), (e) => console.error(event.object, e));
+        });
+
+    // Handle "sensor/Valve?Pos" events
+    } else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
+        const valve_name = event.object.code;
+        const position = event.object.position;
+        const posToCode = {"Fermé": 0, "Ouvert": 1, "Ouverte": 1, "Partiel": 2, "Erreur": 3};
+        const position_code = posToCode[position];
+        var point = [{
+            measurement: "Valves",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                valve_name: valve_name
+                },
+            fields: {
+                position: position,
+                pos_code: position_code
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Valve " + deviceName + " " + valve_name + " " + position + " " + publishDate), (e) => console.error(event.object, e));
+    // Handle "Osmose/Start", "Osmose/Stop"
+    } else if (eventName === "Osmose/Start") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const state = osmData.state;
+        const alarmNo = osmData.alarmNo;
+        const sequence = osmData.sequence;
+        const debut = osmData.startStopTime;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {
+                state: state ? "run":"stop",
+                alarmNo: alarmNo,
+                sequence: sequence,
+                debut: debut
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Osmose start " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    }else if (eventName === "Osmose/Stop") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const state = osmData.state;
+        const alarmNo = osmData.alarmNo;
+        const sequence = osmData.sequence;
+        const runTimeSec = osmData.runTimeSec;
+        const fin = osmData.startStopTime;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {
+                state: state ? "run":"stop",
+                alarmNo: alarmNo,
+                sequence: sequence,
+                duree: runTimeSec,
+                fin: fin
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> Osmose stop " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/alarm") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const alarmNo = osmData.alarmNo;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+                fields: {
+                    alarmNo: alarmNo
+                },
+                timestamp: publishDate
+            }];
+        // Save only real alarm
+        if (alarmNo < 0) {
+            return influx.writePoints(point).then(() => console.log("Influx-> osmose alarm " + fonction + " alarm no:" + alarmNo + " " + publishDate), (e) => console.error(osmData, e));
+        } else {
+            return Promise.resolve();
+        }
+        // return influx.writePoints(point).then(() => console.log("Influx-> osmose alarm " + fonction + " alarm no:" + alarmNo + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/operData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                Col1_gpm: osmData.Col1,
+                Col2_gpm: osmData.Col2,
+                Col3_gpm: osmData.Col3,
+                Col4_gpm: osmData.Col4,
+                Conc_gpm: osmData.Conc,
+                temp_f: osmData.Temp,
+                pression: osmData.Pres,
+                sequence: osmData.sequence,
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> osmose operData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/concData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const sequence = osmData.sequence;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                brix_seve: osmData.BrixSeve,
+                brix_conc: osmData.BrixConc
+            },
+            timestamp: publishDate
+        }];
+        return influx.writePoints(point).then(() => console.log("Influx-> osmose concData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+    } else if (eventName === "Osmose/summaryData") {
+        const osmData = event.object[0];
+        const fonction = osmData.fonction;
+        const sequence = osmData.sequence;
+        const pc_conc = osmData.PC_Conc;
+        const gph_conc = osmData.Conc_GPH;
+        const gph_filt = osmData.Filtrat_GPH;
+        const gph_tot = osmData.Total_GPH;
+        const sumData = pc_conc + gph_conc + gph_filt + gph_tot;
+        var point = [{
+            measurement: "Osmose",
+            tags: {
+                deviceId: deviceId,
+                deviceName: deviceName,
+                fonction: fonction
+                },
+            fields: {               
+                pc_conc: pc_conc,
+                gph_conc: gph_conc,
+                gph_filt: gph_filt,
+                gph_tot: gph_tot,
+                duree: osmData.runTimeSec,
+                sequence: sequence,
+            },
+            timestamp: publishDate
+        }];
+        // Save the data only if its greater than zero
+        if (sumData > 0) {
+            return influx.writePoints(point).then(() => console.log("Influx-> osmose summaryData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
+        } else {
+            return Promise.resolve();
+        }
+        // return influx.writePoints(point).then(() => console.log("Influx-> osmose summaryData " + fonction + " " + sequence + " " + publishDate), (e) => console.error(osmData, e));
     } else {
         return Promise.resolve();
     }
@@ -272,7 +607,8 @@ function startApp(db) {
 
     const server = http.createServer(app);
     dashboard.onChange(function (data, event, device) {
-        return insertData(db, event, device);
+        return insertInflux(influx, event, device);
+        // return insertData(db, event, device);
     });
     server.listen(port);
     console.log('HTTP Server started: http://localhost:' + port);
