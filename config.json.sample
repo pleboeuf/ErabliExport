@@ -9,6 +9,10 @@
   },
   "influxdb": {
 	  "host": "localhost",
-	  "port": 8096
+    "username": "",
+    "password": "",
+	  "port": 8086,
+    "database": "Test2021",
+    "schema": "influxDbSchema.json"
   }
 }
