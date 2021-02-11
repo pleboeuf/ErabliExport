@@ -6,7 +6,7 @@
     "start": "node app.js"
   },
   "dependencies": {
-    "better-sqlite3": "^5.4.0",
+    "better-sqlite3": "^7.1.2",
     "chalk": "^2.4.2",
     "express": "^4.16.4",
     "influx": "^5.5.1",
