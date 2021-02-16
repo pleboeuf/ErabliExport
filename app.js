@@ -311,16 +311,16 @@ function insertInflux(influx, event, device) {
             var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
             if (sensor !== undefined) {
                 publishDate = new Date(event.published_at).getTime();
-                const line_name = sensor.code;
-                const in_hg = data[sensor.inputName];
-                const temp = data["temp"];
-                const bat_temp = data["batTemp"];
-                const Vin = data["Vin"];
-                const light = data["li"];
-                const soc = data["soc"];
-                const volt = data["volt"];
-                const rssi = data["rssi"];
-                const qual = data["qual"];
+                var line_name = sensor.code;
+                var in_hg = data[sensor.inputName];
+                var temp = data["temp"];
+                var bat_temp = data["batTemp"];
+                var Vin = data["Vin"];
+                var light = data["li"];
+                var soc = data["soc"];
+                var volt = data["volt"];
+                var rssi = data["rssi"];
+                var qual = data["qual"];
                 var point = [{
                     measurement: "Vacuum_ligne",
                     tags: {
