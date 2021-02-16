@@ -307,42 +307,45 @@ function insertInflux(influx, event, device) {
        // Handle "Vacuum/Lignes" events
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
-        const sensors = dashboard.getVacuumSensorOfLineVacuumDevice(device);
-        publishDate = new Date(event.published_at).getTime();
-        sensors.forEach (function(sensor) {
-            const line_name = sensor.code;
-            const in_hg = data[sensor.inputName];
-            const temp = data["temp"];
-            const bat_temp = data["batTemp"];
-            const Vin = data["Vin"];
-            const light = data["li"];
-            const soc = data["soc"];
-            const volt = data["volt"];
-            const rssi = data["rssi"];
-            const qual = data["qual"];
-            var point = [{
-                measurement: "Vacuum_ligne",
-                tags: {
-                    deviceId: deviceId,
-                    deviceName: deviceName,
-                    line_name: line_name
-                },
-                fields: {
-                    vacuum: in_hg,
-                    ext_temp: temp,
-                    bat_temp: bat_temp,
-                    light: light,
-                    Vin: Vin,
-                    soc: soc,
-                    bat_volt: volt,
-                    rssi: rssi,
-                    sig_gual: qual
-                },
-                timestamp: publishDate
-            }];
-            return influx.writePoints(point).then(() => console.log("Influx-> Vacuum " + line_name + " " + in_hg + " " + publishDate), (e) => console.error(event.object, e));
-        });
-
+        for (var i = 0; i < 4; i++) {
+            var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
+            if (sensor !== undefined) {
+                publishDate = new Date(event.published_at).getTime();
+                const line_name = sensor.code;
+                const in_hg = data[sensor.inputName];
+                const temp = data["temp"];
+                const bat_temp = data["batTemp"];
+                const Vin = data["Vin"];
+                const light = data["li"];
+                const soc = data["soc"];
+                const volt = data["volt"];
+                const rssi = data["rssi"];
+                const qual = data["qual"];
+                var point = [{
+                    measurement: "Vacuum_ligne",
+                    tags: {
+                        deviceId: deviceId,
+                        deviceName: deviceName,
+                        line_name: line_name
+                    },
+                    fields: {
+                        vacuum: in_hg,
+                        ext_temp: temp,
+                        bat_temp: bat_temp,
+                        light: light,
+                        Vin: Vin,
+                        soc: soc,
+                        bat_volt: volt,
+                        rssi: rssi,
+                        sig_gual: qual
+                    },
+                    timestamp: publishDate
+                }];
+                return influx.writePoints(point).then(() => console.log("Influx-> Vacuum " + line_name + " " + in_hg + " " + publishDate), (e) => console.error(event.object, e));
+            } else {
+                break;
+            }
+        }
     // Handle "sensor/Valve?Pos" events
     } else if (eventName === "sensor/Valve1Pos" || eventName === "sensor/Valve2Pos") {
         const valve_name = event.object.code;
