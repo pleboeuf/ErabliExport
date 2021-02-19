@@ -11,37 +11,32 @@
            "deviceId",
            "deviceName",
            "eventName"
-        ],
-        "_exemple":"pumps,deviceName=EB-P1,deviceID=230021000447343233323032,eventName=pump/T1 state=true,dutyCycle=0.08,rate=198 1490894444"
+        ]
      },
      
      {  
-       "measurement":"tanks",
+       "measurement":"Reservoirs",
        "fields":{  
           "fill_gallons":"Influx.FieldType.FLOAT",
-          "fill_percent":"Influx.FieldType.FLOAT",
-          "valveDrain":"Influx.FieldType.STRING",
-          "valveSortie":"Influx.FieldType.STRING"
+          "fill_percent":"Influx.FieldType.FLOAT"
        },
        "tag":[  
           "deviceId",
           "deviceName",
           "eventName"
-       ],
-       "_exemple":"tanks,deviceName=EB-RS1,deviceID=340030000a51353335323536,, eventName=sensor/level,eData=1553,contenu=253,valveDrain=« Ouvert’,valveSortie=‘Fermé’ 1490894444"
+       ]
     },
 
     {  
-       "measurement":"vacuums",
+       "measurement":"Vacuum",
        "fields":{  
-          "value":"Influx.FieldType.FLOAT"
+          "vacuum":"Influx.FieldType.FLOAT"
        },
        "tag":[  
           "deviceId",
           "deviceName",
           "eventName"
-       ],
-       "_exemple":"vaccums,deviceName=EB-P1,deviceID=230021000447343233323032 value=-1897 1490891235"
+       ]
     },
 
     {  
@@ -61,8 +56,20 @@
            "deviceName",
            "eventName",
            "line_name"
-        ],
-        "_exemple":"coulee,deviceName=EB-P1,deviceID=230021000447343233323032,number=3,status=‘start’ 1439878680"
+        ]
+     },
+
+     {
+        "measurement":"Valves",
+        "fields":{
+           "position":"Influx.FieldType.STRING",
+           "pos_code":"Influx.FieldType.INTEGER"
+        },
+        "tag":[  
+         "deviceId",
+         "deviceName",
+         "valve_name"
+      ]
      },
  
      {  
@@ -77,55 +84,65 @@
            "deviceId",
            "deviceName",
            "eventName"
-        ],
-        "_exemple":"temperatures,deviceName=EB-P1,deviceID=230021000447343233323032,enclosureTemp=23 1490891235"
+        ]
      },
 
      {  
-       "measurement":"cycles",
+       "measurement":"Cycles",
        "fields":{  
           "volume":"Influx.FieldType.FLOAT",
-          "volume_total":"Influx.FieldType.FLOAT",
-          "rate":"Influx.FieldType.FLOAT",
+          "debit_out":"Influx.FieldType.FLOAT",
+          "debit_in":"Influx.FieldType.FLOAT",
           "dutycycle":"Influx.FieldType.FLOAT",
-          "pump_on_time":"Influx.FieldType.FLOAT"
+          "ON_time":"Influx.FieldType.FLOAT",
+          "OFF_time":"Influx.FieldType.FLOAT"
        },
        "tag":[  
           "deviceId",
-          "deviceName",
-          "eventName"
-       ],
-       "_exemple":"temperatures,deviceName=EB-P1,deviceID=230021000447343233323032,enclosureTemp=23 1490891235"
+          "deviceName"
+       ]
     },
 
     {  
         "measurement":"coulee",
         "fields":{  
-           "number":"Influx.FieldType.INTEGER",
-           "status":"Influx.FieldType.STRING"
+           "etat_num":"Influx.FieldType.INTEGER",
+           "volume_total":"Influx.FieldType.FLOAT"
         },
         "tag":[  
            "deviceId",
            "deviceName",
-           "eventName"
-        ],
-        "_exemple":"coulee,deviceName=EB-P1,deviceID=230021000447343233323032,number=3,status=‘start’ 1439878680"
+           "etat"
+        ]
      },
  
     {  
-       "measurement":"osmose",
+       "measurement":"Osmose",
        "fields":{  
-          "state":"Influx.FieldType.STRING",
-          "duration":"Influx.FieldType.FLOAT"
+         "Col1_gpm":  "Influx.FieldType.FLOAT",
+         "Col2_gpm":  "Influx.FieldType.FLOAT",
+         "Col3_gpm":  "Influx.FieldType.FLOAT",
+         "Col4_gpm":  "Influx.FieldType.FLOAT",
+         "Conc_gpm":  "Influx.FieldType.FLOAT",
+         "alarmNo":   "Influx.FieldType.INTEGER",
+         "brix_conc": "Influx.FieldType.FLOAT",
+         "brix_seve": "Influx.FieldType.FLOAT",
+         "debut":     "Influx.FieldType.timestamp",
+         "duree":     "Influx.FieldType.INTEGER",
+         "fin":       "Influx.FieldType.timestamp",
+         "gph_conc":  "Influx.FieldType.FLOAT",
+         "gph_filt":  "Influx.FieldType.FLOAT",
+         "gph_tot":   "Influx.FieldType.FLOAT",
+         "pc_conc":   "Influx.FieldType.FLOAT",
+         "pression":  "Influx.FieldType.INTEGER",
+         "state":     "Influx.FieldType.STRING",
+         "temp_f":    "Influx.FieldType.FLOAT"
        },
-       "tag":[  
-          "op1234",
-          "op4321",
-          "lavage",
-          "lavageSavon",
-          "rinçage",
-          "eventName"
-       ],
-       "_exemple":"osmose,deviceName=EB-OSM,deviceID=230021000447343233323032,op1234=\"Start\" 1490891235"
+       "tag":[
+         "deviceId",
+         "deviceName",
+         "fonction",
+         "sequence"
+       ]
     }
  ]
