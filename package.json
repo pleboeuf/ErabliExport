@@ -12,7 +12,7 @@
     "influx": "^5.5.1",
     "moment": "^2.24.0",
     "promise": "^8.0.2",
-    "underscore": "^1.9.1",
+    "underscore": "^1.12.1",
     "websocket": "^1.0.28"
   },
   "engines": {
