@@ -10,7 +10,7 @@
     "chalk": "^2.4.2",
     "express": "^4.16.4",
     "influx": "^5.5.1",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "promise": "^8.0.2",
     "underscore": "^1.13.1",
     "websocket": "^1.0.28"
