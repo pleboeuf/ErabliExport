@@ -8,7 +8,7 @@
   "dependencies": {
     "better-sqlite3": "^7.1.2",
     "chalk": "^2.4.2",
-    "express": "^4.16.4",
+    "express": "^4.17.3",
     "influx": "^5.5.1",
     "moment": "^2.29.4",
     "promise": "^8.0.2",
