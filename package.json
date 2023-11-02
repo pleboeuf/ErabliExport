@@ -1,21 +1,21 @@
 {
-  "name": "ErabliExport",
-  "version": "0.9.0",
-  "private": true,
-  "scripts": {
-    "start": "node app.js"
-  },
-  "dependencies": {
-    "better-sqlite3": "^7.1.2",
-    "chalk": "^2.4.2",
-    "express": "^4.16.4",
-    "influx": "^5.5.1",
-    "moment": "^2.29.4",
-    "promise": "^8.0.2",
-    "underscore": "^1.13.1",
-    "websocket": "^1.0.28"
-  },
-  "engines": {
-    "node": ">= 8.15.0"
-  }
+    "name": "ErabliExport",
+    "version": "0.9.0",
+    "private": true,
+    "scripts": {
+        "start": "node app.js"
+    },
+    "dependencies": {
+        "better-sqlite3": "^7.6.2",
+        "chalk": "^4.1.2",
+        "express": "^4.18.2",
+        "influx": "^5.9.3",
+        "moment": "^2.29.4",
+        "promise": "^8.3.0",
+        "underscore": "^1.13.6",
+        "websocket": "^1.0.34"
+    },
+    "engines": {
+        "node": ">= 8.15.0"
+    }
 }
