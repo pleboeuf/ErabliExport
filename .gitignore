@@ -1,5 +1,6 @@
 *.sqlite3*
 config.json
+config.json.bk
 data/
 node_modules/
 .idea*
