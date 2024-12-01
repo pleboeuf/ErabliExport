@@ -6,7 +6,7 @@
         "start": "node app.js"
     },
     "dependencies": {
-        "better-sqlite3": "^7.6.2",
+        "better-sqlite3": "^11.6.0",
         "chalk": "^4.1.2",
         "express": "^4.21.0",
         "influx": "^5.9.3",
@@ -16,6 +16,6 @@
         "websocket": "^1.0.34"
     },
     "engines": {
-        "node": ">= 8.15.0"
+        "node": ">= 22.11.0"
     }
 }
