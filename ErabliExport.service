@@ -10,7 +10,7 @@ User=erabliere
 Group=erabliere
 WorkingDirectory=/home/erabliere/ErabliExport
 PIDFile=/home/erabliere/ErabliExport/pid/ErabliExport.pid
-ExecStart=/home/erabliere/.nvm/versions/node/v14.21.3/bin/node /home/erabliere/ErabliExport/app.js
+ExecStart=/home/erabliere/.nvm/versions/node/v22.11.0/bin/node /home/erabliere/ErabliExport/app.js
 Restart=on-abnormal
 TimeoutSec=30
 
