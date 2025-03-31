@@ -1,3 +1,6 @@
+require("dotenv").config();
+// const fetch = (...args) =>
+//     import("node-fetch").then(({ default: fetch }) => fetch(...args)); // Add this line
 const fs = require("fs");
 const moment = require("moment");
 const Promise = require("promise");
@@ -398,7 +401,8 @@ function insertInflux(influx, event, device) {
         if (event.object) {
             const fill_gallons = liters2gallons(event.object.fill);
             const fill_percent = event.object.fill / event.object.capacity;
-            if (fill_gallons !== "NaN" || fill_gallons !== undefined) {
+
+            if (!(isNaN(fill_gallons) || isNaN(fill_percent))) {
                 var point = [
                     {
                         measurement: "Reservoirs",

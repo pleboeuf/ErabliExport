@@ -8,9 +8,12 @@
     "dependencies": {
         "better-sqlite3": "^11.6.0",
         "chalk": "^4.1.2",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.7",
         "express": "^4.21.2",
         "influx": "^5.9.3",
         "moment": "^2.29.4",
+        "node-fetch": "^3.3.2",
         "promise": "^8.3.0",
         "underscore": "^1.13.6",
         "websocket": "^1.0.34"
