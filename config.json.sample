@@ -10,9 +10,9 @@
         "filename": "../ErabliDash/config.json"
     },
     "influxdb": {
-        "host": "servername.local",
+        "host": "localhost",
         "port": 8086,
-        "database": "Test_2023",
+        "database": "Test_2026",
         "schema": "influxDbSchema.json"
     }
 }

@@ -312,10 +312,17 @@ function insertInflux(influx, event, device) {
     const deviceName = device.name;
     var eventName = event.data.eName;
 
-    if (event.data.timer === undefined) {
-        var publishDate = 1000000000 * event.data.timestamp;
+    // Calculate publishDate based on event type
+    var publishDate;
+    if (event.data.lastUpdatedAt) {
+        // Datacer events use lastUpdatedAt timestamp
+        publishDate = new Date(event.data.lastUpdatedAt).getTime() * 1000000;
+    } else if (event.data.timer === undefined) {
+        // Legacy events without timer
+        publishDate = 1000000000 * event.data.timestamp;
     } else {
-        var publishDate =
+        // Legacy events with timer
+        publishDate =
             1000000 * (1000 * event.data.timestamp + (event.data.timer % 1000));
     }
 
@@ -471,62 +478,45 @@ function insertInflux(influx, event, device) {
             (e) => console.error(event.object, e)
         );
 
-        // Handle "Vacuum/Lignes" events
+    // Handle "Vacuum/Lignes" events (Datacer format)
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
-        var publishDate = new Date().getTime() * 1000000;
-        for (var i = 0; i < 4; i++) {
-            var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
-            if (sensor !== undefined) {
-                var line_name = sensor.code;
-                var in_hg = data[sensor.inputName];
-                var temp = data["temp"];
-                var bat_temp = data["batTemp"];
-                var Vin = data["Vin"];
-                var light = data["li"];
-                var soc = data["soc"];
-                var volt = data["volt"];
-                var rssi = data["rssi"];
-                var qual = data["qual"];
-                var point = [
-                    {
-                        measurement: "Vacuum_ligne",
-                        tags: {
-                            deviceId: deviceId,
-                            deviceName: deviceName,
-                            line_name: line_name,
-                        },
-                        fields: {
-                            vacuum: in_hg,
-                            ext_temp: temp,
-                            bat_temp: bat_temp,
-                            light: light,
-                            Vin: Vin,
-                            soc: soc,
-                            bat_volt: volt,
-                            rssi: rssi,
-                            sig_gual: qual,
-                        },
-                        timestamp: publishDate,
-                    },
-                ];
-                influx.writePoints(point).then(
-                    () =>
-                        console.log(
-                            "Influx-> Vacuum_ligne " +
-                                line_name +
-                                " " +
-                                in_hg +
-                                " " +
-                                publishDate
-                        ),
-                    (e) => console.error(event.object, e)
-                );
-            } else {
-                break;
-            }
-        }
-        return Promise.resolve();
+        const line_name = data.label;
+        const in_hg = data.eData; // Already in inHg, no division needed
+        const temp = data.temp;
+        const percentCharge = data.percentCharge;
+        const ref = data.ref;
+        
+        var point = [
+            {
+                measurement: "Vacuum_ligne",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    line_name: line_name,
+                },
+                fields: {
+                    vacuum: in_hg,
+                    ext_temp: temp,
+                    percentCharge: percentCharge,
+                    ref: ref,
+                },
+                timestamp: publishDate,
+            },
+        ];
+        
+        return influx.writePoints(point).then(
+            () =>
+                console.log(
+                    "Influx-> Vacuum_ligne " +
+                        line_name +
+                        " " +
+                        in_hg +
+                        " inHg " +
+                        publishDate
+                ),
+            (e) => console.error(event.object, e)
+        );
         // Handle "sensor/Valve?Pos" events
     } else if (
         eventName === "sensor/Valve1Pos" ||
