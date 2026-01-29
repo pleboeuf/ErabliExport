@@ -21,6 +21,11 @@ const influx = new Influx.InfluxDB({
     database: ExportConfig["influxdb"]["database"],
 });
 
+// Global references for graceful shutdown
+let mainDb = null;
+let httpServer = null;
+let isShuttingDown = false;
+
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
         fs.open(dbFile, "r", function (err, fd) {
@@ -789,6 +794,7 @@ function insertInflux(influx, event, device) {
 }
 
 function startApp(db) {
+    mainDb = db; // Store database reference for shutdown
     const http = require("http");
     const port = ExportConfig.port || "3003";
     app.set("port", port);
@@ -904,16 +910,64 @@ function startApp(db) {
     });
 
     const server = http.createServer(app);
+    httpServer = server; // Store server reference for shutdown
     dashboard.onChange(function (data, event, device) {
         return insertInflux(influx, event, device);
         // return insertData(db, event, device);
     });
     server.listen(port);
-    console.log("HTTP Server started: http://localhost:" + port);
+    console.log(chalk.green("HTTP Server started: http://localhost:" + port));
 }
+
+// Graceful shutdown handler
+function gracefulShutdown(signal) {
+    if (isShuttingDown) {
+        return;
+    }
+    isShuttingDown = true;
+    
+    console.log(chalk.yellow(`\n${signal} received, shutting down gracefully...`));
+    
+    // Close HTTP server
+    if (httpServer) {
+        console.log(chalk.gray("Closing HTTP server..."));
+        httpServer.close(() => {
+            console.log(chalk.gray("HTTP server closed"));
+        });
+    }
+    
+    // Disconnect dashboard WebSocket
+    if (dashboard && dashboard.disconnect) {
+        console.log(chalk.gray("Disconnecting from dashboard..."));
+        try {
+            dashboard.disconnect();
+        } catch (err) {
+            console.error(chalk.red("Error disconnecting dashboard:"), err.message);
+        }
+    }
+    
+    // Close database connection
+    if (mainDb) {
+        console.log(chalk.gray("Closing database connection..."));
+        try {
+            mainDb.close();
+            console.log(chalk.gray("Database closed"));
+        } catch (err) {
+            console.error(chalk.red("Error closing database:"), err.message);
+        }
+    }
+    
+    console.log(chalk.green("Shutdown complete. Exiting."));
+    process.exit(0);
+}
+
+// Register signal handlers for graceful shutdown
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 ensureDatabase()
     .then(startApp)
     .catch(function (err) {
         console.error(chalk.red(err));
+        process.exit(1);
     });
