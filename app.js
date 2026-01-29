@@ -21,6 +21,11 @@ const influx = new Influx.InfluxDB({
     database: ExportConfig["influxdb"]["database"],
 });
 
+// Global references for graceful shutdown
+let mainDb = null;
+let httpServer = null;
+let isShuttingDown = false;
+
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
         fs.open(dbFile, "r", function (err, fd) {
@@ -312,10 +317,17 @@ function insertInflux(influx, event, device) {
     const deviceName = device.name;
     var eventName = event.data.eName;
 
-    if (event.data.timer === undefined) {
-        var publishDate = 1000000000 * event.data.timestamp;
+    // Calculate publishDate based on event type
+    var publishDate;
+    if (event.data.lastUpdatedAt) {
+        // Datacer events use lastUpdatedAt timestamp
+        publishDate = new Date(event.data.lastUpdatedAt).getTime() * 1000000;
+    } else if (event.data.timer === undefined) {
+        // Legacy events without timer
+        publishDate = 1000000000 * event.data.timestamp;
     } else {
-        var publishDate =
+        // Legacy events with timer
+        publishDate =
             1000000 * (1000 * event.data.timestamp + (event.data.timer % 1000));
     }
 
@@ -471,62 +483,45 @@ function insertInflux(influx, event, device) {
             (e) => console.error(event.object, e)
         );
 
-        // Handle "Vacuum/Lignes" events
+    // Handle "Vacuum/Lignes" events (Datacer format)
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
-        var publishDate = new Date().getTime() * 1000000;
-        for (var i = 0; i < 4; i++) {
-            var sensor = dashboard.getVacuumSensorOfLineVacuumDevice(device, i);
-            if (sensor !== undefined) {
-                var line_name = sensor.code;
-                var in_hg = data[sensor.inputName];
-                var temp = data["temp"];
-                var bat_temp = data["batTemp"];
-                var Vin = data["Vin"];
-                var light = data["li"];
-                var soc = data["soc"];
-                var volt = data["volt"];
-                var rssi = data["rssi"];
-                var qual = data["qual"];
-                var point = [
-                    {
-                        measurement: "Vacuum_ligne",
-                        tags: {
-                            deviceId: deviceId,
-                            deviceName: deviceName,
-                            line_name: line_name,
-                        },
-                        fields: {
-                            vacuum: in_hg,
-                            ext_temp: temp,
-                            bat_temp: bat_temp,
-                            light: light,
-                            Vin: Vin,
-                            soc: soc,
-                            bat_volt: volt,
-                            rssi: rssi,
-                            sig_gual: qual,
-                        },
-                        timestamp: publishDate,
-                    },
-                ];
-                influx.writePoints(point).then(
-                    () =>
-                        console.log(
-                            "Influx-> Vacuum_ligne " +
-                                line_name +
-                                " " +
-                                in_hg +
-                                " " +
-                                publishDate
-                        ),
-                    (e) => console.error(event.object, e)
-                );
-            } else {
-                break;
-            }
-        }
-        return Promise.resolve();
+        const line_name = data.label;
+        const in_hg = data.eData; // Already in inHg, no division needed
+        const temp = data.temp;
+        const percentCharge = data.percentCharge;
+        const ref = data.ref;
+        
+        var point = [
+            {
+                measurement: "Vacuum_ligne",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    line_name: line_name,
+                },
+                fields: {
+                    vacuum: in_hg,
+                    ext_temp: temp,
+                    percentCharge: percentCharge,
+                    ref: ref,
+                },
+                timestamp: publishDate,
+            },
+        ];
+        
+        return influx.writePoints(point).then(
+            () =>
+                console.log(
+                    "Influx-> Vacuum_ligne " +
+                        line_name +
+                        " " +
+                        in_hg +
+                        " inHg " +
+                        publishDate
+                ),
+            (e) => console.error(event.object, e)
+        );
         // Handle "sensor/Valve?Pos" events
     } else if (
         eventName === "sensor/Valve1Pos" ||
@@ -799,6 +794,7 @@ function insertInflux(influx, event, device) {
 }
 
 function startApp(db) {
+    mainDb = db; // Store database reference for shutdown
     const http = require("http");
     const port = ExportConfig.port || "3003";
     app.set("port", port);
@@ -914,16 +910,64 @@ function startApp(db) {
     });
 
     const server = http.createServer(app);
+    httpServer = server; // Store server reference for shutdown
     dashboard.onChange(function (data, event, device) {
         return insertInflux(influx, event, device);
         // return insertData(db, event, device);
     });
     server.listen(port);
-    console.log("HTTP Server started: http://localhost:" + port);
+    console.log(chalk.green("HTTP Server started: http://localhost:" + port));
 }
+
+// Graceful shutdown handler
+function gracefulShutdown(signal) {
+    if (isShuttingDown) {
+        return;
+    }
+    isShuttingDown = true;
+    
+    console.log(chalk.yellow(`\n${signal} received, shutting down gracefully...`));
+    
+    // Close HTTP server
+    if (httpServer) {
+        console.log(chalk.gray("Closing HTTP server..."));
+        httpServer.close(() => {
+            console.log(chalk.gray("HTTP server closed"));
+        });
+    }
+    
+    // Disconnect dashboard WebSocket
+    if (dashboard && dashboard.disconnect) {
+        console.log(chalk.gray("Disconnecting from dashboard..."));
+        try {
+            dashboard.disconnect();
+        } catch (err) {
+            console.error(chalk.red("Error disconnecting dashboard:"), err.message);
+        }
+    }
+    
+    // Close database connection
+    if (mainDb) {
+        console.log(chalk.gray("Closing database connection..."));
+        try {
+            mainDb.close();
+            console.log(chalk.gray("Database closed"));
+        } catch (err) {
+            console.error(chalk.red("Error closing database:"), err.message);
+        }
+    }
+    
+    console.log(chalk.green("Shutdown complete. Exiting."));
+    process.exit(0);
+}
+
+// Register signal handlers for graceful shutdown
+process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 
 ensureDatabase()
     .then(startApp)
     .catch(function (err) {
         console.error(chalk.red(err));
+        process.exit(1);
     });
