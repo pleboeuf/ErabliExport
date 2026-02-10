@@ -307,6 +307,50 @@ function insertData(db, event, device) {
             position_code,
         ];
         return runSql(sql, params);
+    // Handle "Tank/Level" events from Datacer
+    } else if (eventName === "Tank/Level") {
+        const data = event.data;
+        const tank_name = data.name;
+        const raw_value = data.rawValue;
+        const depth = data.depth;
+        const capacity = data.capacity;
+        const fill = data.fill;
+        const sql =
+            "INSERT INTO datacer_tanks (device_id, device_name, tank_name, published_at, temps_mesure, raw_value, depth, capacity, fill) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        const params = [
+            deviceId,
+            deviceName,
+            tank_name,
+            publishDate,
+            moment(publishDate).format("YYYY-MM-DD HH:mm:ss"),
+            raw_value,
+            depth,
+            capacity,
+            fill,
+        ];
+        return runSql(sql, params);
+    // Handle "Water/Volume" events from Datacer
+    } else if (eventName === "Water/Volume") {
+        const data = event.data;
+        const meter_name = data.name;
+        const volume_total = data.volume_total;
+        const volume_heure = data.volume_heure;
+        const volume_entaille = data.volume_entaille;
+        const volume_since_reset = data.volume_since_reset;
+        const sql =
+            "INSERT INTO datacer_water (device_id, device_name, meter_name, published_at, temps_mesure, volume_total, volume_heure, volume_entaille, volume_since_reset) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        const params = [
+            deviceId,
+            deviceName,
+            meter_name,
+            publishDate,
+            moment(publishDate).format("YYYY-MM-DD HH:mm:ss"),
+            volume_total,
+            volume_heure,
+            volume_entaille,
+            volume_since_reset,
+        ];
+        return runSql(sql, params);
     } else {
         return Promise.resolve();
     }
@@ -788,6 +832,80 @@ function insertInflux(influx, event, device) {
         } else {
             return Promise.resolve();
         }
+    // Handle "Tank/Level" events from Datacer
+    } else if (eventName === "Tank/Level") {
+        const data = event.data;
+        const tank_name = data.name;
+        const raw_value = data.rawValue;
+        const depth = data.depth;
+        const capacity = data.capacity;
+        const fill = data.fill;
+        var point = [
+            {
+                measurement: "Tank_level",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    tank_name: tank_name,
+                },
+                fields: {
+                    raw_value: raw_value,
+                    depth: depth,
+                    capacity: capacity,
+                    fill: fill,
+                },
+                timestamp: publishDate,
+            },
+        ];
+        return influx.writePoints(point).then(
+            () =>
+                console.log(
+                    "Influx-> Tank_level " +
+                        tank_name +
+                        " fill: " +
+                        fill +
+                        " " +
+                        publishDate
+                ),
+            (e) => console.error(event.data, e)
+        );
+    // Handle "Water/Volume" events from Datacer
+    } else if (eventName === "Water/Volume") {
+        const data = event.data;
+        const meter_name = data.name;
+        const volume_total = data.volume_total;
+        const volume_heure = data.volume_heure;
+        const volume_entaille = data.volume_entaille;
+        const volume_since_reset = data.volume_since_reset;
+        var point = [
+            {
+                measurement: "Water_volume",
+                tags: {
+                    deviceId: deviceId,
+                    deviceName: deviceName,
+                    meter_name: meter_name,
+                },
+                fields: {
+                    volume_total: volume_total,
+                    volume_heure: volume_heure,
+                    volume_entaille: volume_entaille,
+                    volume_since_reset: volume_since_reset,
+                },
+                timestamp: publishDate,
+            },
+        ];
+        return influx.writePoints(point).then(
+            () =>
+                console.log(
+                    "Influx-> Water_volume " +
+                        meter_name +
+                        " vol_since_reset: " +
+                        volume_since_reset +
+                        " " +
+                        publishDate
+                ),
+            (e) => console.error(event.data, e)
+        );
     } else {
         return Promise.resolve();
     }

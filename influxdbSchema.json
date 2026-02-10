@@ -144,5 +144,35 @@
          "fonction",
          "sequence"
        ]
+    },
+
+    {  
+       "measurement":"Tank_level",
+       "fields":{  
+         "raw_value": "Influx.FieldType.FLOAT",
+         "depth":     "Influx.FieldType.FLOAT",
+         "capacity":  "Influx.FieldType.FLOAT",
+         "fill":      "Influx.FieldType.FLOAT"
+       },
+       "tag":[
+         "deviceId",
+         "deviceName",
+         "tank_name"
+       ]
+    },
+
+    {  
+       "measurement":"Water_volume",
+       "fields":{  
+         "volume_total":       "Influx.FieldType.FLOAT",
+         "volume_heure":       "Influx.FieldType.FLOAT",
+         "volume_entaille":    "Influx.FieldType.FLOAT",
+         "volume_since_reset": "Influx.FieldType.FLOAT"
+       },
+       "tag":[
+         "deviceId",
+         "deviceName",
+         "meter_name"
+       ]
     }
  ]

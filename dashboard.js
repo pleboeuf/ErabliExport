@@ -791,9 +791,24 @@ exports.Dashboard = function (config, WebSocketClient) {
         return getDevice(deviceId).then((device) => {
             eventsSinceStore++;
             if (!device) {
-                console.log("Device " + deviceId + " is new!");
-                // TODO This adds duplicate devices to dashboard.json!
-                // return addDevice(new Device(deviceId, "New" + deviceId, generationId, serialNo)).then(handleEvent);
+                // For Datacer synthetic events (Tank/Level, Water/Volume, Vacuum/Lignes), 
+                // create a temporary device object to allow processing
+                const eventName = message.data.eName || '';
+                if (eventName === 'Tank/Level' || eventName === 'Water/Volume' || eventName === 'Vacuum/Lignes') {
+                    console.log("Processing Datacer event from new device: " + deviceId);
+                    // Create a temporary device object for Datacer events
+                    const tempDevice = {
+                        id: deviceId,
+                        name: message.data.name || message.data.device || deviceId,
+                        generationId: generationId,
+                        lastEventSerial: serialNo,
+                    };
+                    return handleEvent(tempDevice, message);
+                } else {
+                    console.log("Device " + deviceId + " is new!");
+                    // TODO This adds duplicate devices to dashboard.json!
+                    // return addDevice(new Device(deviceId, "New" + deviceId, generationId, serialNo)).then(handleEvent);
+                }
             } else {
                 const handleEventFunc = () => handleEvent(device, message);
 

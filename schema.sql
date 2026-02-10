@@ -71,3 +71,25 @@ CREATE TABLE saison (
    debut datetime,
    fin datetime
 );
+CREATE TABLE datacer_tanks (
+   device_id VARCHAR(64),
+   device_name VARCHAR(64),
+   tank_name VARCHAR(24),
+   published_at timestamp,
+   temps_mesure datetime,
+   raw_value FLOAT,
+   depth FLOAT,
+   capacity FLOAT,
+   fill FLOAT
+);
+CREATE TABLE datacer_water (
+   device_id VARCHAR(64),
+   device_name VARCHAR(64),
+   meter_name VARCHAR(64),
+   published_at timestamp,
+   temps_mesure datetime,
+   volume_total FLOAT,
+   volume_heure FLOAT,
+   volume_entaille FLOAT,
+   volume_since_reset FLOAT
+);
