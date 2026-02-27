@@ -107,7 +107,8 @@
         "measurement":"coulee",
         "fields":{  
            "etat_num":"Influx.FieldType.INTEGER",
-           "volume_total":"Influx.FieldType.FLOAT"
+           "volume_total":"Influx.FieldType.FLOAT",
+           "_comment": "Dynamic fields: COMPTEUR_EAU_N (FLOAT) for each water meter volume_since_reset at coulée start/stop"
         },
         "tag":[  
            "deviceId",

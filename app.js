@@ -178,7 +178,7 @@ function startApp(db) {
         return new Promise(function (complete, reject) {
             try {
                 res.write(
-                    "device_id \tdevice_name \tstart_stop_time \tevent_type \tvolume" +
+                    "device_id \tdevice_name \tstart_stop_time \tevent_type \tvolume \twater_volumes" +
                         "\n"
                 );
                 const sql = "select * from coulee";
@@ -192,6 +192,7 @@ function startApp(db) {
                     );
                     res.write(row.event_type + "\t");
                     res.write(row.volume + "\t");
+                    res.write((row.water_volumes_json || "") + "\t");
                     res.write("\n");
                 }
                 complete();

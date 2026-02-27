@@ -65,7 +65,8 @@ CREATE TABLE coulee (
    start_stop_time timestamp,
    temps_debut_fin datetime,
    event_type VARCHAR(8),
-   volume_total FLOAT
+   volume_total FLOAT,
+   water_volumes_json TEXT
 );
 CREATE TABLE saison (
    debut datetime,

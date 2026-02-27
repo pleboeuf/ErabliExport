@@ -117,8 +117,15 @@ function insertData(db, event, device, options = {}) {
     ) {
         const volume_gal = event.object.volume;
         const eventType = event.data.eData === 1 ? "start" : "stop";
+        // Collect water meter volumes as JSON
+        const waterVolumes = {};
+        if (event.object.waterMeters) {
+            event.object.waterMeters.forEach(meter => {
+                waterVolumes[meter.name] = parseFloat(meter.volume_since_reset) || 0;
+            });
+        }
         const sql =
-            "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume_total) VALUES (?, ?, ?, ?, ?, ?)";
+            "INSERT INTO coulee (device_id, device_name, start_stop_time, temps_debut_fin ,event_type, volume_total, water_volumes_json) VALUES (?, ?, ?, ?, ?, ?, ?)";
         const params = [
             deviceId,
             deviceName,
@@ -126,6 +133,7 @@ function insertData(db, event, device, options = {}) {
             moment(publishDate).format("YYYY-MM-DD HH:mm:ss"),
             eventType,
             volume_gal,
+            JSON.stringify(waterVolumes),
         ];
         return runSql(sql, params);
         // Handle "sensor/level" events
@@ -349,6 +357,17 @@ function insertInflux(influx, event, device) {
     ) {
         const volume_gal = event.object.volume;
         const eventType = event.data.eData === 1 ? "start" : "stop";
+        // Build fields including water meter volumes
+        const fields = {
+            etat_num: event.data.eData,
+            volume_total: volume_gal,
+        };
+        if (event.object.waterMeters) {
+            event.object.waterMeters.forEach(meter => {
+                const fieldKey = meter.name.replace(/[^a-zA-Z0-9_]/g, '_');
+                fields[fieldKey] = parseFloat(meter.volume_since_reset) || 0;
+            });
+        }
         const point = [
             {
                 measurement: "Coulee",
@@ -357,10 +376,7 @@ function insertInflux(influx, event, device) {
                     deviceName: deviceName,
                     etat: eventType,
                 },
-                fields: {
-                    etat_num: event.data.eData,
-                    volume_total: volume_gal,
-                },
+                fields: fields,
                 timestamp: publishDate,
             },
         ];
