@@ -16,7 +16,7 @@
         "moment": "^2.29.4",
         "node-fetch": "^3.3.2",
         "promise": "^8.3.0",
-        "underscore": "^1.13.6",
+        "underscore": "^1.13.8",
         "websocket": "^1.0.34"
     },
     "devDependencies": {
