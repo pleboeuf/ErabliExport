@@ -111,7 +111,9 @@ function insertData(db, event, device, options = {}) {
                 util.format(
                     "Got pump/endCycle from device %s, but pump is undefined",
                     event.coreid,
+                    event.coreid,
                 ),
+                event,
                 event,
             );
             return Promise.resolve();
