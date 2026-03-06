@@ -28,8 +28,8 @@ function insertData(db, event, device, options = {}) {
                 util.format(
                     "(Dashboard) Overriding event name to %s for device %s",
                     device.eventName,
-                    device.id
-                )
+                    device.id,
+                ),
             );
         } else {
             event.data.eName = "Vacuum/Lignes";
@@ -37,8 +37,8 @@ function insertData(db, event, device, options = {}) {
             console.log(
                 util.format(
                     "(Dashboard) Overriding event name from DB to 'Vacuum/Lignes' for device %s",
-                    device.id
-                )
+                    device.id,
+                ),
             );
         }
     }
@@ -104,9 +104,9 @@ function insertData(db, event, device, options = {}) {
             console.warn(
                 util.format(
                     "Got pump/endCycle from device %s, but pump is undefined",
-                    event.coreid
+                    event.coreid,
                 ),
-                event
+                event,
             );
             return Promise.resolve();
         }
@@ -120,8 +120,9 @@ function insertData(db, event, device, options = {}) {
         // Collect water meter volumes as JSON
         const waterVolumes = {};
         if (event.object.waterMeters) {
-            event.object.waterMeters.forEach(meter => {
-                waterVolumes[meter.name] = parseFloat(meter.volume_since_reset) || 0;
+            event.object.waterMeters.forEach((meter) => {
+                waterVolumes[meter.name] =
+                    parseFloat(meter.volume_since_reset) || 0;
             });
         }
         const sql =
@@ -156,14 +157,14 @@ function insertData(db, event, device, options = {}) {
             console.warn(
                 util.format(
                     "Got sensor/level from device %s, but tank is undefined",
-                    event.coreid
+                    event.coreid,
                 ),
-                event
+                event,
             );
             return Promise.resolve();
         }
     } else if (eventName === "sensor/vacuum") {
-        const in_hg = event.data.eData / 100;
+        const in_hg = event.data.eData;
         const sql =
             "INSERT INTO vacuum (device_id, device_name, published_at, temps_mesure, in_hg ) VALUES (?, ?, ?, ?, ?)";
         const params = [
@@ -238,7 +239,7 @@ function insertData(db, event, device, options = {}) {
             position_code,
         ];
         return runSql(sql, params);
-    // Handle "Tank/Level" events from Datacer
+        // Handle "Tank/Level" events from Datacer
     } else if (eventName === "Tank/Level") {
         const data = event.data;
         const tank_name = data.name;
@@ -260,7 +261,7 @@ function insertData(db, event, device, options = {}) {
             fill,
         ];
         return runSql(sql, params);
-    // Handle "Water/Volume" events from Datacer
+        // Handle "Water/Volume" events from Datacer
     } else if (eventName === "Water/Volume") {
         const data = event.data;
         const meter_name = data.name;
@@ -339,15 +340,15 @@ function insertInflux(influx, event, device) {
             ];
             return influx.writePoints(point).then(
                 () => console.log("Influx-> Cycles ok " + " " + publishDate),
-                (e) => console.error(event.object, e)
+                (e) => console.error(event.object, e),
             );
         } else {
             console.warn(
                 util.format(
                     "Got pump/endCycle from device %s, but pump is undefined",
-                    event.coreid
+                    event.coreid,
                 ),
-                event
+                event,
             );
             return Promise.resolve();
         }
@@ -363,8 +364,8 @@ function insertInflux(influx, event, device) {
             volume_total: volume_gal,
         };
         if (event.object.waterMeters) {
-            event.object.waterMeters.forEach(meter => {
-                const fieldKey = meter.name.replace(/[^a-zA-Z0-9_]/g, '_');
+            event.object.waterMeters.forEach((meter) => {
+                const fieldKey = meter.name.replace(/[^a-zA-Z0-9_]/g, "_");
                 fields[fieldKey] = parseFloat(meter.volume_since_reset) || 0;
             });
         }
@@ -388,9 +389,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         eventType +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.object, e)
+            (e) => console.error(event.object, e),
         );
     } else if (eventName === "sensor/level") {
         if (event.object) {
@@ -421,23 +422,23 @@ function insertInflux(influx, event, device) {
                                 fill_gallons +
                                 " gal" +
                                 " " +
-                                publishDate
+                                publishDate,
                         ),
-                    (e) => console.error(event.object, e)
+                    (e) => console.error(event.object, e),
                 );
             }
         } else {
             console.warn(
                 util.format(
                     "Got sensor/level from device %s, but tank is undefined",
-                    event.coreid
+                    event.coreid,
                 ),
-                event
+                event,
             );
             return Promise.resolve();
         }
     } else if (eventName === "sensor/vacuum") {
-        const in_hg = event.data.eData / 100;
+        const in_hg = event.data.eData;
         const point = [
             {
                 measurement: "Vacuum",
@@ -459,9 +460,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         in_hg +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.object, e)
+            (e) => console.error(event.object, e),
         );
     } else if (eventName === "Vacuum/Lignes") {
         const data = event.data;
@@ -470,7 +471,7 @@ function insertInflux(influx, event, device) {
         const temp = data.temp;
         const percentCharge = data.percentCharge;
         const ref = data.ref;
-        
+
         var point = [
             {
                 measurement: "Vacuum_ligne",
@@ -488,7 +489,7 @@ function insertInflux(influx, event, device) {
                 timestamp: publishDate,
             },
         ];
-        
+
         return influx.writePoints(point).then(
             () =>
                 console.log(
@@ -497,9 +498,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         in_hg +
                         " inHg " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.object, e)
+            (e) => console.error(event.object, e),
         );
     } else if (
         eventName === "sensor/Valve1Pos" ||
@@ -540,9 +541,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         position +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.object, e)
+            (e) => console.error(event.object, e),
         );
     } else if (eventName === "Osmose/Start") {
         const osmData = event.object[0];
@@ -576,9 +577,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         sequence +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(osmData, e)
+            (e) => console.error(osmData, e),
         );
     } else if (eventName === "Osmose/Stop") {
         const osmData = event.object[0];
@@ -614,9 +615,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         sequence +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(osmData, e)
+            (e) => console.error(osmData, e),
         );
     } else if (eventName === "Osmose/alarm") {
         const osmData = event.object[0];
@@ -645,9 +646,9 @@ function insertInflux(influx, event, device) {
                             " alarm no:" +
                             alarmNo +
                             " " +
-                            publishDate
+                            publishDate,
                     ),
-                (e) => console.error(osmData, e)
+                (e) => console.error(osmData, e),
             );
         } else {
             return Promise.resolve();
@@ -684,9 +685,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         osmData.sequence +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(osmData, e)
+            (e) => console.error(osmData, e),
         );
     } else if (eventName === "Osmose/concData") {
         const osmData = event.object[0];
@@ -715,9 +716,9 @@ function insertInflux(influx, event, device) {
                         " " +
                         sequence +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(osmData, e)
+            (e) => console.error(osmData, e),
         );
     } else if (eventName === "Osmose/summaryData") {
         const osmData = event.object[0];
@@ -756,14 +757,14 @@ function insertInflux(influx, event, device) {
                             " " +
                             sequence +
                             " " +
-                            publishDate
+                            publishDate,
                     ),
-                (e) => console.error(osmData, e)
+                (e) => console.error(osmData, e),
             );
         } else {
             return Promise.resolve();
         }
-    // Handle "Tank/Level" events from Datacer
+        // Handle "Tank/Level" events from Datacer
     } else if (eventName === "Tank/Level") {
         const data = event.data;
         const tank_name = data.name;
@@ -796,11 +797,11 @@ function insertInflux(influx, event, device) {
                         " fill: " +
                         fill +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.data, e)
+            (e) => console.error(event.data, e),
         );
-    // Handle "Water/Volume" events from Datacer
+        // Handle "Water/Volume" events from Datacer
     } else if (eventName === "Water/Volume") {
         const data = event.data;
         const meter_name = data.name;
@@ -833,9 +834,9 @@ function insertInflux(influx, event, device) {
                         " vol_since_reset: " +
                         volume_since_reset +
                         " " +
-                        publishDate
+                        publishDate,
                 ),
-            (e) => console.error(event.data, e)
+            (e) => console.error(event.data, e),
         );
     } else {
         return Promise.resolve();
@@ -845,5 +846,5 @@ function insertInflux(influx, event, device) {
 module.exports = {
     insertData,
     insertInflux,
-    liters2gallons
+    liters2gallons,
 };
