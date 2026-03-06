@@ -184,6 +184,56 @@ describe("insertData - SQLite insertions", () => {
             expect(params[8]).toBe(0); // volume_since_reset
         });
     });
+
+    describe("sensor/vacuum events", () => {
+        it("divides eData by 100 for EB-Px devices", async () => {
+            const event = {
+                coreid: "3c001f000447393035313138",
+                data: {
+                    eName: "sensor/vacuum",
+                    eData: 2500,
+                    timestamp: 1707600000,
+                    timer: 123,
+                },
+            };
+
+            const device = {
+                id: "3c001f000447393035313138",
+                name: "EB-P1",
+            };
+
+            await insertData(mockDb, event, device);
+
+            const insertedRows = mockDb.getInsertedRows();
+            expect(insertedRows).toHaveLength(1);
+            expect(insertedRows[0].sql).toContain("INSERT INTO vacuum");
+            expect(insertedRows[0].params[4]).toBe(25);
+        });
+
+        it("does not divide eData by 100 for non-EB-Px/EB-Vx devices", async () => {
+            const event = {
+                coreid: "DATACER-VACUUM-001",
+                data: {
+                    eName: "sensor/vacuum",
+                    eData: 2500,
+                    timestamp: 1707600000,
+                    timer: 123,
+                },
+            };
+
+            const device = {
+                id: "DATACER-VACUUM-001",
+                name: "POMPE 1",
+            };
+
+            await insertData(mockDb, event, device);
+
+            const insertedRows = mockDb.getInsertedRows();
+            expect(insertedRows).toHaveLength(1);
+            expect(insertedRows[0].sql).toContain("INSERT INTO vacuum");
+            expect(insertedRows[0].params[4]).toBe(2500);
+        });
+    });
 });
 
 describe("insertInflux - InfluxDB writes", () => {
@@ -332,6 +382,56 @@ describe("insertInflux - InfluxDB writes", () => {
             const expectedTimestamp =
                 new Date(lastUpdatedAt).getTime() * 1000000;
             expect(writtenPoints[0].timestamp).toBe(expectedTimestamp);
+        });
+    });
+
+    describe("sensor/vacuum events", () => {
+        it("divides eData by 100 for EB-Vx devices", async () => {
+            const event = {
+                coreid: "540034000b51353335323535",
+                data: {
+                    eName: "sensor/vacuum",
+                    eData: 2550,
+                    timestamp: 1707600000,
+                    timer: 234,
+                },
+            };
+
+            const device = {
+                id: "540034000b51353335323535",
+                name: "EB-V2",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].measurement).toBe("Vacuum");
+            expect(writtenPoints[0].fields.vacuum).toBe(25.5);
+        });
+
+        it("does not divide eData by 100 for non-EB-Px/EB-Vx devices", async () => {
+            const event = {
+                coreid: "DATACER-VACUUM-002",
+                data: {
+                    eName: "sensor/vacuum",
+                    eData: 2550,
+                    timestamp: 1707600000,
+                    timer: 234,
+                },
+            };
+
+            const device = {
+                id: "DATACER-VACUUM-002",
+                name: "POMPE 2",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].measurement).toBe("Vacuum");
+            expect(writtenPoints[0].fields.vacuum).toBe(2550);
         });
     });
 });
