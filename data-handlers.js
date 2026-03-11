@@ -859,8 +859,6 @@ function insertInflux(influx, event, device) {
         const data = event.data;
         const tank_name = data.name;
         const raw_value = data.rawValue;
-        const depth = data.depth;
-        const capacity = data.capacity;
         const fill = data.fill;
         const tankMetrics = getDatacerTankFillMetrics(data, event.object);
         var point = [
@@ -873,8 +871,6 @@ function insertInflux(influx, event, device) {
                 },
                 fields: {
                     raw_value: raw_value,
-                    depth: depth,
-                    capacity: capacity,
                     fill: fill,
                     fill_gallons: tankMetrics ? tankMetrics.fillGallons : 0,
                     fill_percent: tankMetrics ? tankMetrics.fillPercent : 0,

@@ -151,8 +151,6 @@
        "measurement":"Tank_level",
        "fields":{  
          "raw_value": "Influx.FieldType.FLOAT",
-         "depth":     "Influx.FieldType.FLOAT",
-         "capacity":  "Influx.FieldType.FLOAT",
          "fill":      "Influx.FieldType.FLOAT",
          "fill_gallons":"Influx.FieldType.FLOAT",
          "fill_percent":"Influx.FieldType.FLOAT"

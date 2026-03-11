@@ -351,8 +351,6 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(point.tags.deviceName).toBe("G9-G10");
             expect(point.tags.tank_name).toBe("Reservoir-Principal");
             expect(point.fields.raw_value).toBe(450.5);
-            expect(point.fields.depth).toBe(1200);
-            expect(point.fields.capacity).toBe(5000);
             expect(point.fields.fill).toBe(2500);
             expect(point.fields.fill_gallons).toBe(550);
             expect(point.fields.fill_percent).toBe(0.5);
