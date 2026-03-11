@@ -13,6 +13,57 @@ function shouldScaleVacuumEData(deviceName) {
     return isEbPumpOrVacuumDevice;
 }
 
+function normalizeForMatching(value) {
+    if (typeof value !== "string") {
+        return "";
+    }
+    return value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase();
+}
+
+function isDatacerTankAlias(value) {
+    const normalized = normalizeForMatching(value);
+    return (
+        normalized === "reservoirs" ||
+        normalized === "reservoir" ||
+        normalized === "tank" ||
+        normalized === "bassin"
+    );
+}
+
+function isDatacerTankEventName(eventName) {
+    const normalized = normalizeForMatching(eventName);
+    if (normalized === "tank/level") {
+        return true;
+    }
+    const [mainTopic] = normalized.split("/");
+    return isDatacerTankAlias(mainTopic);
+}
+
+function parseNumberOrNull(value) {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getDatacerTankFillMetrics(data) {
+    const fillValue = parseNumberOrNull(data && data.fill);
+    const capacityValue = parseNumberOrNull(data && data.capacity);
+    if (fillValue === null) {
+        return null;
+    }
+
+    return {
+        fillGallons: liters2gallons(fillValue),
+        fillPercent:
+            capacityValue !== null && capacityValue > 0
+                ? fillValue / capacityValue
+                : 0,
+    };
+}
+
 /**
  * Insert event data into SQLite database
  * @param {Object} db - SQLite database instance
@@ -49,7 +100,9 @@ function insertData(db, event, device, options = {}) {
         }
     }
 
-    if (eventName === "Vacuum/Lignes") {
+    if (event.data.lastUpdatedAt) {
+        publishDate = new Date(event.data.lastUpdatedAt).getTime();
+    } else if (eventName === "Vacuum/Lignes") {
         publishDate = new Date(event.published_at).getTime();
     } else {
         publishDate = 1000 * event.data.timestamp + (event.data.timer % 1000);
@@ -250,16 +303,16 @@ function insertData(db, event, device, options = {}) {
         ];
         return runSql(sql, params);
         // Handle "Tank/Level" events from Datacer
-    } else if (eventName === "Tank/Level") {
+    } else if (isDatacerTankEventName(eventName)) {
         const data = event.data;
         const tank_name = data.name;
         const raw_value = data.rawValue;
         const depth = data.depth;
         const capacity = data.capacity;
         const fill = data.fill;
-        const sql =
+        const datacerSql =
             "INSERT INTO datacer_tanks (device_id, device_name, tank_name, published_at, temps_mesure, raw_value, depth, capacity, fill) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        const params = [
+        const datacerParams = [
             deviceId,
             deviceName,
             tank_name,
@@ -270,7 +323,24 @@ function insertData(db, event, device, options = {}) {
             capacity,
             fill,
         ];
-        return runSql(sql, params);
+        const writes = [runSql(datacerSql, datacerParams)];
+
+        const tankMetrics = getDatacerTankFillMetrics(data);
+        if (tankMetrics) {
+            const tanksSql =
+                "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
+            const tanksParams = [
+                deviceId,
+                deviceName,
+                publishDate,
+                moment(publishDate).format("YYYY-MM-DD HH:mm:ss"),
+                tankMetrics.fillGallons,
+                tankMetrics.fillPercent,
+            ];
+            writes.push(runSql(tanksSql, tanksParams));
+        }
+
+        return Promise.all(writes);
         // Handle "Water/Volume" events from Datacer
     } else if (eventName === "Water/Volume") {
         const data = event.data;
@@ -777,13 +847,14 @@ function insertInflux(influx, event, device) {
             return Promise.resolve();
         }
         // Handle "Tank/Level" events from Datacer
-    } else if (eventName === "Tank/Level") {
+    } else if (isDatacerTankEventName(eventName)) {
         const data = event.data;
         const tank_name = data.name;
         const raw_value = data.rawValue;
         const depth = data.depth;
         const capacity = data.capacity;
         const fill = data.fill;
+        const tankMetrics = getDatacerTankFillMetrics(data);
         var point = [
             {
                 measurement: "Tank_level",
@@ -797,6 +868,8 @@ function insertInflux(influx, event, device) {
                     depth: depth,
                     capacity: capacity,
                     fill: fill,
+                    fill_gallons: tankMetrics ? tankMetrics.fillGallons : 0,
+                    fill_percent: tankMetrics ? tankMetrics.fillPercent : 0,
                 },
                 timestamp: publishDate,
             },

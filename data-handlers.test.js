@@ -64,22 +64,27 @@ describe("insertData - SQLite insertions", () => {
             await insertData(mockDb, event, device);
 
             const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
+            expect(insertedRows).toHaveLength(2);
 
-            const { sql, params } = insertedRows[0];
-            expect(sql).toContain("INSERT INTO datacer_tanks");
-            expect(sql).toContain(
+            const datacerInsert = insertedRows[0];
+            expect(datacerInsert.sql).toContain("INSERT INTO datacer_tanks");
+            expect(datacerInsert.sql).toContain(
                 "device_id, device_name, tank_name, published_at, temps_mesure, raw_value, depth, capacity, fill"
             );
 
             // Verify params
-            expect(params[0]).toBe("DATACER-TANK-001"); // device_id
-            expect(params[1]).toBe("G9-G10"); // device_name
-            expect(params[2]).toBe("Reservoir-Principal"); // tank_name
-            expect(params[5]).toBe(450.5); // raw_value
-            expect(params[6]).toBe(1200); // depth
-            expect(params[7]).toBe(5000); // capacity
-            expect(params[8]).toBe(2500); // fill
+            expect(datacerInsert.params[0]).toBe("DATACER-TANK-001"); // device_id
+            expect(datacerInsert.params[1]).toBe("G9-G10"); // device_name
+            expect(datacerInsert.params[2]).toBe("Reservoir-Principal"); // tank_name
+            expect(datacerInsert.params[5]).toBe(450.5); // raw_value
+            expect(datacerInsert.params[6]).toBe(1200); // depth
+            expect(datacerInsert.params[7]).toBe(5000); // capacity
+            expect(datacerInsert.params[8]).toBe(2500); // fill
+
+            const tanksInsert = insertedRows[1];
+            expect(tanksInsert.sql).toContain("INSERT INTO tanks");
+            expect(tanksInsert.params[4]).toBe(550); // fill_gallons
+            expect(tanksInsert.params[5]).toBe(0.5); // fill_percent
         });
 
         it("handles Tank/Level events with missing optional fields", async () => {
@@ -105,8 +110,39 @@ describe("insertData - SQLite insertions", () => {
             await insertData(mockDb, event, device);
 
             const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
+            expect(insertedRows).toHaveLength(2);
             expect(insertedRows[0].sql).toContain("INSERT INTO datacer_tanks");
+            expect(insertedRows[1].sql).toContain("INSERT INTO tanks");
+            expect(insertedRows[1].params[5]).toBe(0);
+        });
+
+        it("supports Datacer tank alias event names (e.g. BASSIN)", async () => {
+            const event = {
+                coreid: "DATACER-TANK-003",
+                data: {
+                    eName: "BASSIN",
+                    name: "BASSIN",
+                    rawValue: 220,
+                    depth: 1000,
+                    capacity: 4000,
+                    fill: 1000,
+                    lastUpdatedAt: "2026-03-11T16:00:00.000Z",
+                },
+            };
+
+            const device = {
+                id: "DATACER-TANK-003",
+                name: "BASSIN",
+            };
+
+            await insertData(mockDb, event, device);
+
+            const insertedRows = mockDb.getInsertedRows();
+            expect(insertedRows).toHaveLength(2);
+            expect(insertedRows[0].sql).toContain("INSERT INTO datacer_tanks");
+            expect(insertedRows[1].sql).toContain("INSERT INTO tanks");
+            expect(insertedRows[1].params[4]).toBe(220);
+            expect(insertedRows[1].params[5]).toBe(0.25);
         });
     });
 
@@ -285,6 +321,8 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(point.fields.depth).toBe(1200);
             expect(point.fields.capacity).toBe(5000);
             expect(point.fields.fill).toBe(2500);
+            expect(point.fields.fill_gallons).toBe(550);
+            expect(point.fields.fill_percent).toBe(0.5);
             expect(point.timestamp).toBeDefined();
         });
 
@@ -314,6 +352,34 @@ describe("insertInflux - InfluxDB writes", () => {
             const expectedTimestamp =
                 new Date(lastUpdatedAt).getTime() * 1000000;
             expect(writtenPoints[0].timestamp).toBe(expectedTimestamp);
+        });
+
+        it("supports Datacer tank alias event names (Réservoirs/tank/BASSIN)", async () => {
+            const event = {
+                coreid: "DATACER-TANK-ALIAS",
+                data: {
+                    eName: "Réservoirs/Level",
+                    name: "Réservoirs",
+                    rawValue: 200,
+                    depth: 900,
+                    capacity: 3000,
+                    fill: 1500,
+                    lastUpdatedAt: "2026-03-11T17:00:00.000Z",
+                },
+            };
+
+            const device = {
+                id: "DATACER-TANK-ALIAS",
+                name: "Réservoirs",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].measurement).toBe("Tank_level");
+            expect(writtenPoints[0].fields.fill_gallons).toBe(330);
+            expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
         });
     });
 
