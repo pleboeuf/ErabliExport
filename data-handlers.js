@@ -48,9 +48,17 @@ function parseNumberOrNull(value) {
     return Number.isFinite(parsed) ? parsed : null;
 }
 
-function getDatacerTankFillMetrics(data) {
-    const fillValue = parseNumberOrNull(data && data.fill);
-    const capacityValue = parseNumberOrNull(data && data.capacity);
+function getDatacerTankFillMetrics(data, tankObject) {
+    const objectFillValue = parseNumberOrNull(tankObject && tankObject.fill);
+    const objectCapacityValue = parseNumberOrNull(
+        tankObject && tankObject.capacity,
+    );
+    const payloadFillValue = parseNumberOrNull(data && data.fill);
+    const payloadCapacityValue = parseNumberOrNull(data && data.capacity);
+    const fillValue =
+        objectFillValue !== null ? objectFillValue : payloadFillValue;
+    const capacityValue =
+        objectCapacityValue !== null ? objectCapacityValue : payloadCapacityValue;
     if (fillValue === null) {
         return null;
     }
@@ -325,7 +333,7 @@ function insertData(db, event, device, options = {}) {
         ];
         const writes = [runSql(datacerSql, datacerParams)];
 
-        const tankMetrics = getDatacerTankFillMetrics(data);
+        const tankMetrics = getDatacerTankFillMetrics(data, event.object);
         if (tankMetrics) {
             const tanksSql =
                 "INSERT INTO tanks (device_id, device_name, published_at, temps_mesure, fill_gallons, fill_percent) VALUES (?, ?, ?, ?, ?, ?)";
@@ -854,7 +862,7 @@ function insertInflux(influx, event, device) {
         const depth = data.depth;
         const capacity = data.capacity;
         const fill = data.fill;
-        const tankMetrics = getDatacerTankFillMetrics(data);
+        const tankMetrics = getDatacerTankFillMetrics(data, event.object);
         var point = [
             {
                 measurement: "Tank_level",

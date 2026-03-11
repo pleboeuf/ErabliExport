@@ -144,6 +144,39 @@ describe("insertData - SQLite insertions", () => {
             expect(insertedRows[1].params[4]).toBe(220);
             expect(insertedRows[1].params[5]).toBe(0.25);
         });
+
+        it("prefers computed dashboard tank values for gallons and percent", async () => {
+            const event = {
+                coreid: "DATACER-TANK-004",
+                data: {
+                    eName: "Tank/Level",
+                    name: "Reservoir-Compute",
+                    rawValue: 120,
+                    depth: 900,
+                    capacity: 9999,
+                    fill: 12,
+                    lastUpdatedAt: "2026-03-11T17:30:00.000Z",
+                },
+                object: {
+                    fill: 2500,
+                    capacity: 5000,
+                },
+            };
+
+            const device = {
+                id: "DATACER-TANK-004",
+                name: "BASSIN TEST",
+            };
+
+            await insertData(mockDb, event, device);
+
+            const insertedRows = mockDb.getInsertedRows();
+            expect(insertedRows).toHaveLength(2);
+            const tanksInsert = insertedRows[1];
+            expect(tanksInsert.sql).toContain("INSERT INTO tanks");
+            expect(tanksInsert.params[4]).toBe(550); // ceil(2500 / 4.54609188)
+            expect(tanksInsert.params[5]).toBe(0.5); // 2500 / 5000
+        });
     });
 
     describe("Water/Volume events", () => {
@@ -379,6 +412,37 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(writtenPoints).toHaveLength(1);
             expect(writtenPoints[0].measurement).toBe("Tank_level");
             expect(writtenPoints[0].fields.fill_gallons).toBe(330);
+            expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
+        });
+
+        it("uses computed dashboard tank values for Datacer fill_gallons/fill_percent", async () => {
+            const event = {
+                coreid: "DATACER-TANK-005",
+                data: {
+                    eName: "Tank/Level",
+                    name: "Reservoir-Computed",
+                    rawValue: 180,
+                    depth: 750,
+                    capacity: 1234,
+                    fill: 1,
+                    lastUpdatedAt: "2026-03-11T17:35:00.000Z",
+                },
+                object: {
+                    fill: 2500,
+                    capacity: 5000,
+                },
+            };
+
+            const device = {
+                id: "DATACER-TANK-005",
+                name: "G9-G10",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].fields.fill_gallons).toBe(550);
             expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
         });
     });

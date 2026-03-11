@@ -209,8 +209,11 @@ function startApp(db) {
     const server = http.createServer(app);
     httpServer = server; // Store server reference for shutdown
     dashboard.onChange(function (data, event, device) {
-        return insertInflux(influx, event, device);
-        // return insertData(db, event, device);
+        void data;
+        return Promise.all([
+            insertInflux(influx, event, device),
+            insertData(db, event, device, { dashboard }),
+        ]);
     });
     server.listen(port);
     console.log(chalk.green("HTTP Server started: http://localhost:" + port));
