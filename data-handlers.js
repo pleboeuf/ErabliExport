@@ -7,6 +7,19 @@ function liters2gallons(liters) {
     return Math.ceil(liters / 4.54609188);
 }
 
+const DATACER_RESERVOIR_MIRROR_TANKS = new Set(["RF2"]);
+
+function getDatacerReservoirMirrorDeviceName(tankName) {
+    if (typeof tankName !== "string") {
+        return null;
+    }
+    const normalized = tankName.trim().toUpperCase();
+    if (!DATACER_RESERVOIR_MIRROR_TANKS.has(normalized)) {
+        return null;
+    }
+    return `EB-${normalized}`;
+}
+
 function shouldScaleVacuumEData(deviceName) {
     const isEbPumpOrVacuumDevice =
         typeof deviceName === "string" && /^EB-[PV]\d+$/i.test(deviceName);
@@ -493,6 +506,7 @@ function insertInflux(influx, event, device) {
                         tags: {
                             deviceId: deviceId,
                             deviceName: deviceName,
+                            sensorType: "ultrasonic",
                         },
                         fields: {
                             fill_gallons: fill_gallons,
@@ -861,6 +875,8 @@ function insertInflux(influx, event, device) {
         const raw_value = data.rawValue;
         const fill = data.fill;
         const tankMetrics = getDatacerTankFillMetrics(data, event.object);
+        const mirroredReservoirDeviceName =
+            getDatacerReservoirMirrorDeviceName(tank_name);
         var point = [
             {
                 measurement: "Tank_level",
@@ -868,6 +884,7 @@ function insertInflux(influx, event, device) {
                     deviceId: deviceId,
                     deviceName: deviceName,
                     tank_name: tank_name,
+                    sensorType: "pressure",
                 },
                 fields: {
                     raw_value: raw_value,
@@ -878,6 +895,21 @@ function insertInflux(influx, event, device) {
                 timestamp: publishDate,
             },
         ];
+        if (tankMetrics && mirroredReservoirDeviceName) {
+            point.push({
+                measurement: "Reservoirs",
+                tags: {
+                    deviceId: mirroredReservoirDeviceName,
+                    deviceName: mirroredReservoirDeviceName,
+                    sensorType: "pressure",
+                },
+                fields: {
+                    fill_gallons: tankMetrics.fillGallons,
+                    fill_percent: tankMetrics.fillPercent,
+                },
+                timestamp: publishDate,
+            });
+        }
         return influx.writePoints(point).then(
             () =>
                 console.log(

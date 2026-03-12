@@ -318,6 +318,35 @@ describe("insertInflux - InfluxDB writes", () => {
         jest.restoreAllMocks();
     });
 
+    describe("sensor/level events", () => {
+        it("writes Reservoirs points with sensorType=ultrasonic", async () => {
+            const event = {
+                coreid: "370027000547343138333038",
+                data: {
+                    eName: "sensor/level",
+                    timestamp: 1707600000,
+                    timer: 111,
+                },
+                object: {
+                    fill: 2500,
+                    capacity: 5000,
+                },
+            };
+
+            const device = {
+                id: "370027000547343138333038",
+                name: "EB-RF1",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].measurement).toBe("Reservoirs");
+            expect(writtenPoints[0].tags.sensorType).toBe("ultrasonic");
+        });
+    });
+
     describe("Tank/Level events", () => {
         it("correctly writes Tank/Level events to the Tank_level measurement", async () => {
             const event = {
@@ -350,11 +379,60 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(point.tags.deviceId).toBe("DATACER-TANK-001");
             expect(point.tags.deviceName).toBe("G9-G10");
             expect(point.tags.tank_name).toBe("Reservoir-Principal");
+            expect(point.tags.sensorType).toBe("pressure");
             expect(point.fields.raw_value).toBe(450.5);
             expect(point.fields.fill).toBe(2500);
             expect(point.fields.fill_gallons).toBe(550);
             expect(point.fields.fill_percent).toBe(0.5);
             expect(point.timestamp).toBeDefined();
+        });
+
+        it("mirrors Datacer RF2 Tank/Level events into Reservoirs as EB-RF2", async () => {
+            const event = {
+                coreid: "BASSIN RF2-RS1-RS2",
+                data: {
+                    eName: "Tank/Level",
+                    name: "RF2",
+                    rawValue: 76.43,
+                    depth: 0,
+                    capacity: 103.23,
+                    fill: 96,
+                    lastUpdatedAt: "2026-03-12T16:15:47.000Z",
+                },
+            };
+
+            const device = {
+                id: "BASSIN RF2-RS1-RS2",
+                name: "BASSIN RF2-RS1-RS2",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            expect(mockInflux.writePoints).toHaveBeenCalledTimes(1);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(2);
+
+            const tankPoint = writtenPoints.find(
+                (point) => point.measurement === "Tank_level",
+            );
+            const reservoirPoint = writtenPoints.find(
+                (point) => point.measurement === "Reservoirs",
+            );
+
+            expect(tankPoint).toBeDefined();
+            expect(tankPoint.tags.deviceName).toBe("BASSIN RF2-RS1-RS2");
+            expect(tankPoint.tags.tank_name).toBe("RF2");
+            expect(tankPoint.tags.sensorType).toBe("pressure");
+
+            expect(reservoirPoint).toBeDefined();
+            expect(reservoirPoint.tags.deviceId).toBe("EB-RF2");
+            expect(reservoirPoint.tags.deviceName).toBe("EB-RF2");
+            expect(reservoirPoint.tags.sensorType).toBe("pressure");
+            expect(reservoirPoint.fields.fill_gallons).toBe(22);
+            expect(reservoirPoint.fields.fill_percent).toBeCloseTo(
+                0.9299622193151216,
+            );
         });
 
         it("uses lastUpdatedAt timestamp for Datacer Tank/Level events", async () => {
