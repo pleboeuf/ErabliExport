@@ -15,6 +15,7 @@ const dbFile = ExportConfig.database || "data.sqlite3";
 const util = require("util");
 const nodeArg = process.argv;
 const Influx = require("influx");
+const { ensureRawEventsTable } = require("./db-utils");
 const influx = new Influx.InfluxDB({
     host: ExportConfig["influxdb"]["host"],
     port: ExportConfig["influxdb"]["port"],
@@ -37,7 +38,11 @@ function ensureDatabase() {
                     .then(resolve, reject);
             } else {
                 console.log(chalk.gray("Using existing database: %s"), dbFile);
-                resolve(new sqlite3(dbFile));
+                try {
+                    resolve(ensureRawEventsTable(new sqlite3(dbFile)));
+                } catch (dbErr) {
+                    reject(dbErr);
+                }
             }
         });
     });
@@ -48,7 +53,7 @@ function createDatabase(schema) {
         try {
             var db = new sqlite3(dbFile);
             db.exec(schema);
-            resolve(db);
+            resolve(ensureRawEventsTable(db));
         } catch (err) {
             reject(err);
         }

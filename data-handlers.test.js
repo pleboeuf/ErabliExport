@@ -1,6 +1,11 @@
 "use strict";
-
-const { insertData, insertInflux } = require("./data-handlers");
+const sqlite3 = require("better-sqlite3");
+const {
+    insertData,
+    insertInflux,
+    stringifySafely,
+} = require("./data-handlers");
+const { ensureRawEventsTable } = require("./db-utils");
 
 // Mock dependencies
 const createMockDb = () => {
@@ -27,6 +32,23 @@ const createMockInflux = () => {
     };
 };
 
+describe("ensureRawEventsTable", () => {
+    it("creates the raw_events table if it does not exist", () => {
+        const db = new sqlite3(":memory:");
+        ensureRawEventsTable(db);
+
+        const rawEventsTable = db
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .get("raw_events");
+
+        expect(rawEventsTable).toBeDefined();
+        expect(rawEventsTable.name).toBe("raw_events");
+        db.close();
+    });
+});
+
 describe("insertData - SQLite insertions", () => {
     let mockDb;
 
@@ -40,268 +62,137 @@ describe("insertData - SQLite insertions", () => {
         jest.restoreAllMocks();
     });
 
-    describe("Tank/Level events", () => {
-        it("correctly inserts Tank/Level events into the datacer_tanks table", async () => {
+    it("correctly inserts all event types into raw_events", async () => {
+        const eventTypes = [
+            "pump/endCycle",
+            "pump/debutDeCoulee",
+            "pump/finDeCoulee",
+            "sensor/level",
+            "sensor/vacuum",
+            "Vacuum/Lignes",
+            "sensor/Valve1Pos",
+            "sensor/Valve2Pos",
+            "Osmose/Start",
+            "Osmose/Stop",
+            "Osmose/alarm",
+            "Osmose/operData",
+            "Osmose/concData",
+            "Osmose/summaryData",
+            "Tank/Level",
+            "Water/Volume",
+        ];
+        const device = { id: "DEVICE-123", name: "Device Label" };
+
+        for (const eventName of eventTypes) {
             const event = {
-                coreid: "DATACER-TANK-001",
+                coreid: "DEVICE-123",
                 data: {
-                    eName: "Tank/Level",
-                    name: "Reservoir-Principal",
-                    rawValue: 450.5,
-                    depth: 1200,
-                    capacity: 5000,
-                    fill: 2500,
+                    eName: eventName,
                     timestamp: 1707600000,
                     timer: 500,
                 },
+                published_at: "2026-03-13T18:00:05.061Z",
             };
-
-            const device = {
-                id: "DATACER-TANK-001",
-                name: "G9-G10",
-            };
-
             await insertData(mockDb, event, device);
+        }
 
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(2);
-
-            const datacerInsert = insertedRows[0];
-            expect(datacerInsert.sql).toContain("INSERT INTO datacer_tanks");
-            expect(datacerInsert.sql).toContain(
-                "device_id, device_name, tank_name, published_at, temps_mesure, raw_value, depth, capacity, fill"
-            );
-
-            // Verify params
-            expect(datacerInsert.params[0]).toBe("DATACER-TANK-001"); // device_id
-            expect(datacerInsert.params[1]).toBe("G9-G10"); // device_name
-            expect(datacerInsert.params[2]).toBe("Reservoir-Principal"); // tank_name
-            expect(datacerInsert.params[5]).toBe(450.5); // raw_value
-            expect(datacerInsert.params[6]).toBe(1200); // depth
-            expect(datacerInsert.params[7]).toBe(5000); // capacity
-            expect(datacerInsert.params[8]).toBe(2500); // fill
-
-            const tanksInsert = insertedRows[1];
-            expect(tanksInsert.sql).toContain("INSERT INTO tanks");
-            expect(tanksInsert.params[4]).toBe(550); // fill_gallons
-            expect(tanksInsert.params[5]).toBe(0.5); // fill_percent
-        });
-
-        it("handles Tank/Level events with missing optional fields", async () => {
-            const event = {
-                coreid: "DATACER-TANK-002",
-                data: {
-                    eName: "Tank/Level",
-                    name: "Reservoir-Secondaire",
-                    rawValue: 300,
-                    depth: undefined,
-                    capacity: undefined,
-                    fill: 1000,
-                    timestamp: 1707600000,
-                    timer: 100,
-                },
-            };
-
-            const device = {
-                id: "DATACER-TANK-002",
-                name: "G11-G12",
-            };
-
-            await insertData(mockDb, event, device);
-
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(2);
-            expect(insertedRows[0].sql).toContain("INSERT INTO datacer_tanks");
-            expect(insertedRows[1].sql).toContain("INSERT INTO tanks");
-            expect(insertedRows[1].params[5]).toBe(0);
-        });
-
-        it("supports Datacer tank alias event names (e.g. BASSIN)", async () => {
-            const event = {
-                coreid: "DATACER-TANK-003",
-                data: {
-                    eName: "BASSIN",
-                    name: "BASSIN",
-                    rawValue: 220,
-                    depth: 1000,
-                    capacity: 4000,
-                    fill: 1000,
-                    lastUpdatedAt: "2026-03-11T16:00:00.000Z",
-                },
-            };
-
-            const device = {
-                id: "DATACER-TANK-003",
-                name: "BASSIN",
-            };
-
-            await insertData(mockDb, event, device);
-
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(2);
-            expect(insertedRows[0].sql).toContain("INSERT INTO datacer_tanks");
-            expect(insertedRows[1].sql).toContain("INSERT INTO tanks");
-            expect(insertedRows[1].params[4]).toBe(220);
-            expect(insertedRows[1].params[5]).toBe(0.25);
-        });
-
-        it("prefers computed dashboard tank values for gallons and percent", async () => {
-            const event = {
-                coreid: "DATACER-TANK-004",
-                data: {
-                    eName: "Tank/Level",
-                    name: "Reservoir-Compute",
-                    rawValue: 120,
-                    depth: 900,
-                    capacity: 9999,
-                    fill: 12,
-                    lastUpdatedAt: "2026-03-11T17:30:00.000Z",
-                },
-                object: {
-                    fill: 2500,
-                    capacity: 5000,
-                },
-            };
-
-            const device = {
-                id: "DATACER-TANK-004",
-                name: "BASSIN TEST",
-            };
-
-            await insertData(mockDb, event, device);
-
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(2);
-            const tanksInsert = insertedRows[1];
-            expect(tanksInsert.sql).toContain("INSERT INTO tanks");
-            expect(tanksInsert.params[4]).toBe(550); // ceil(2500 / 4.54609188)
-            expect(tanksInsert.params[5]).toBe(0.5); // 2500 / 5000
+        const insertedRows = mockDb.getInsertedRows();
+        expect(insertedRows).toHaveLength(eventTypes.length);
+        expect(insertedRows.map((row) => row.params[2])).toEqual(eventTypes);
+        insertedRows.forEach((row) => {
+            expect(row.sql).toContain("INSERT INTO raw_events");
         });
     });
 
-    describe("Water/Volume events", () => {
-        it("correctly inserts Water/Volume events into the datacer_water table", async () => {
-            const event = {
-                coreid: "DATACER-WATER-001",
-                data: {
-                    eName: "Water/Volume",
-                    name: "Compteur-Eau-Principal",
-                    volume_total: 15000.5,
-                    volume_heure: 125.3,
-                    volume_entaille: 0.45,
-                    volume_since_reset: 3500.2,
-                    timestamp: 1707600000,
-                    timer: 750,
-                },
-            };
+    it("stores Tank/Level events in raw_events", async () => {
+        const event = {
+            coreid: "DATACER-TANK-001",
+            data: {
+                eName: "Tank/Level",
+                name: "Reservoir-Principal",
+                rawValue: 450.5,
+                depth: 1200,
+                capacity: 5000,
+                fill: 2500,
+                timestamp: 1707600000,
+                timer: 500,
+            },
+        };
+        const device = { id: "DATACER-TANK-001", name: "G9-G10" };
 
-            const device = {
-                id: "DATACER-WATER-001",
-                name: "Water-Meter-1",
-            };
+        await insertData(mockDb, event, device);
 
-            await insertData(mockDb, event, device);
-
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
-
-            const { sql, params } = insertedRows[0];
-            expect(sql).toContain("INSERT INTO datacer_water");
-            expect(sql).toContain(
-                "device_id, device_name, meter_name, published_at, temps_mesure, volume_total, volume_heure, volume_entaille, volume_since_reset"
-            );
-
-            // Verify params
-            expect(params[0]).toBe("DATACER-WATER-001"); // device_id
-            expect(params[1]).toBe("Water-Meter-1"); // device_name
-            expect(params[2]).toBe("Compteur-Eau-Principal"); // meter_name
-            expect(params[5]).toBe(15000.5); // volume_total
-            expect(params[6]).toBe(125.3); // volume_heure
-            expect(params[7]).toBe(0.45); // volume_entaille
-            expect(params[8]).toBe(3500.2); // volume_since_reset
-        });
-
-        it("handles Water/Volume events with zero values", async () => {
-            const event = {
-                coreid: "DATACER-WATER-002",
-                data: {
-                    eName: "Water/Volume",
-                    name: "Compteur-Neuf",
-                    volume_total: 0,
-                    volume_heure: 0,
-                    volume_entaille: 0,
-                    volume_since_reset: 0,
-                    timestamp: 1707600000,
-                    timer: 200,
-                },
-            };
-
-            const device = {
-                id: "DATACER-WATER-002",
-                name: "New-Meter",
-            };
-
-            await insertData(mockDb, event, device);
-
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
-
-            const { params } = insertedRows[0];
-            expect(params[5]).toBe(0); // volume_total
-            expect(params[6]).toBe(0); // volume_heure
-            expect(params[7]).toBe(0); // volume_entaille
-            expect(params[8]).toBe(0); // volume_since_reset
-        });
+        const insertedRows = mockDb.getInsertedRows();
+        expect(insertedRows).toHaveLength(1);
+        expect(insertedRows[0].sql).toContain("INSERT INTO raw_events");
+        expect(insertedRows[0].params[0]).toBe("DATACER-TANK-001");
+        expect(insertedRows[0].params[1]).toBe("G9-G10");
+        expect(insertedRows[0].params[2]).toBe("Tank/Level");
+        expect(JSON.parse(insertedRows[0].params[5]).rawValue).toBe(450.5);
     });
 
-    describe("sensor/vacuum events", () => {
-        it("divides eData by 100 for EB-Px devices", async () => {
-            const event = {
-                coreid: "3c001f000447393035313138",
-                data: {
-                    eName: "sensor/vacuum",
-                    eData: 2500,
-                    timestamp: 1707600000,
-                    timer: 123,
-                },
-            };
+    it("stores Water/Volume events in raw_events", async () => {
+        const event = {
+            coreid: "DATACER-WATER-001",
+            data: {
+                eName: "Water/Volume",
+                name: "Compteur-Eau-Principal",
+                volume_total: 15000.5,
+                volume_heure: 125.3,
+                volume_entaille: 0.45,
+                volume_since_reset: 3500.2,
+                timestamp: 1707600000,
+                timer: 750,
+            },
+        };
+        const device = { id: "DATACER-WATER-001", name: "Water-Meter-1" };
 
-            const device = {
-                id: "3c001f000447393035313138",
-                name: "EB-P1",
-            };
+        await insertData(mockDb, event, device);
 
-            await insertData(mockDb, event, device);
+        const insertedRows = mockDb.getInsertedRows();
+        expect(insertedRows).toHaveLength(1);
+        expect(insertedRows[0].sql).toContain("INSERT INTO raw_events");
+        expect(insertedRows[0].params[2]).toBe("Water/Volume");
+        expect(JSON.parse(insertedRows[0].params[5]).volume_total).toBe(15000.5);
+    });
 
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
-            expect(insertedRows[0].sql).toContain("INSERT INTO vacuum");
-            expect(insertedRows[0].params[4]).toBe(25);
+    it("stores Vacuum/Lignes events in raw_events without requiring dashboard mapping", async () => {
+        const event = {
+            coreid: "H8-H9-H10",
+            data: {
+                eName: "Vacuum/Lignes",
+                temp: -5,
+                batTemp: 12,
+                Vin: 12.4,
+                li: 10,
+                soc: 78,
+                volt: 3.9,
+                rssi: -80,
+                qual: 25,
+            },
+            published_at: "2026-03-13T18:00:05.061Z",
+        };
+        const device = { id: "H8-H9-H10", name: "H8-H9-H10" };
+
+        await insertData(mockDb, event, device, {
+            dashboard: { getVacuumSensorOfLineVacuumDevice: jest.fn(() => []) },
         });
 
-        it("does not divide eData by 100 for non-EB-Px/EB-Vx devices", async () => {
-            const event = {
-                coreid: "DATACER-VACUUM-001",
-                data: {
-                    eName: "sensor/vacuum",
-                    eData: 2500,
-                    timestamp: 1707600000,
-                    timer: 123,
-                },
-            };
+        const insertedRows = mockDb.getInsertedRows();
+        expect(insertedRows).toHaveLength(1);
+        expect(insertedRows[0].sql).toContain("INSERT INTO raw_events");
+        expect(insertedRows[0].params[2]).toBe("Vacuum/Lignes");
+    });
+});
 
-            const device = {
-                id: "DATACER-VACUUM-001",
-                name: "POMPE 1",
-            };
+describe("stringifySafely", () => {
+    it("handles circular references in JSON objects", () => {
+        const circular = { key: "value" };
+        circular.self = circular;
 
-            await insertData(mockDb, event, device);
+        const result = stringifySafely(circular);
 
-            const insertedRows = mockDb.getInsertedRows();
-            expect(insertedRows).toHaveLength(1);
-            expect(insertedRows[0].sql).toContain("INSERT INTO vacuum");
-            expect(insertedRows[0].params[4]).toBe(2500);
-        });
+        expect(result).toBeNull();
     });
 });
 
@@ -319,7 +210,34 @@ describe("insertInflux - InfluxDB writes", () => {
     });
 
     describe("sensor/level events", () => {
-        it("writes Reservoirs points with sensorType=ultrasonic", async () => {
+        it("adds sensorType tag for sensor/level events", async () => {
+            const event = {
+                coreid: "370027000547343138333038",
+                data: {
+                    eName: "sensor/level",
+                    timestamp: 1707600000,
+                    timer: 234,
+                },
+                object: {
+                    fill: 1200,
+                    capacity: 2400,
+                },
+            };
+            const device = {
+                id: "370027000547343138333038",
+                name: "EB-RF1",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].tags).toMatchObject({
+                sensorType: "ultrasonic",
+            });
+        });
+
+        it("writes Reservoirs points tagged with sensorType=ultrasonic", async () => {
             const event = {
                 coreid: "370027000547343138333038",
                 data: {
@@ -348,6 +266,32 @@ describe("insertInflux - InfluxDB writes", () => {
     });
 
     describe("Tank/Level events", () => {
+        it("adds sensorType tag for Tank/Level events", async () => {
+            const event = {
+                coreid: "DATACER-TANK-001",
+                data: {
+                    eName: "Tank/Level",
+                    name: "Reservoir-Principal",
+                    rawValue: 450.5,
+                    depth: 1200,
+                    capacity: 5000,
+                    fill: 2500,
+                    lastUpdatedAt: "2024-02-10T15:00:00.000Z",
+                },
+            };
+            const device = {
+                id: "DATACER-TANK-001",
+                name: "G9-G10",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].tags).toMatchObject({
+                sensorType: "pressure",
+            });
+        });
         it("correctly writes Tank/Level events to the Tank_level measurement", async () => {
             const event = {
                 coreid: "DATACER-TANK-001",
