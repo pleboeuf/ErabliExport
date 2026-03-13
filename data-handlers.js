@@ -713,4 +713,5 @@ module.exports = {
     insertData,
     insertInflux,
     liters2gallons,
+    stringifySafely,
 };

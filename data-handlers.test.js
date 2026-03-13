@@ -1,6 +1,11 @@
 "use strict";
-
-const { insertData, insertInflux } = require("./data-handlers");
+const sqlite3 = require("better-sqlite3");
+const {
+    insertData,
+    insertInflux,
+    stringifySafely,
+} = require("./data-handlers");
+const { ensureRawEventsTable } = require("./db-utils");
 
 // Mock dependencies
 const createMockDb = () => {
@@ -27,6 +32,23 @@ const createMockInflux = () => {
     };
 };
 
+describe("ensureRawEventsTable", () => {
+    it("creates the raw_events table if it does not exist", () => {
+        const db = new sqlite3(":memory:");
+        ensureRawEventsTable(db);
+
+        const rawEventsTable = db
+            .prepare(
+                "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+            )
+            .get("raw_events");
+
+        expect(rawEventsTable).toBeDefined();
+        expect(rawEventsTable.name).toBe("raw_events");
+        db.close();
+    });
+});
+
 describe("insertData - SQLite insertions", () => {
     let mockDb;
 
@@ -38,6 +60,48 @@ describe("insertData - SQLite insertions", () => {
 
     afterEach(() => {
         jest.restoreAllMocks();
+    });
+
+    it("correctly inserts all event types into raw_events", async () => {
+        const eventTypes = [
+            "pump/endCycle",
+            "pump/debutDeCoulee",
+            "pump/finDeCoulee",
+            "sensor/level",
+            "sensor/vacuum",
+            "Vacuum/Lignes",
+            "sensor/Valve1Pos",
+            "sensor/Valve2Pos",
+            "Osmose/Start",
+            "Osmose/Stop",
+            "Osmose/alarm",
+            "Osmose/operData",
+            "Osmose/concData",
+            "Osmose/summaryData",
+            "Tank/Level",
+            "Water/Volume",
+        ];
+        const device = { id: "DEVICE-123", name: "Device Label" };
+
+        for (const eventName of eventTypes) {
+            const event = {
+                coreid: "DEVICE-123",
+                data: {
+                    eName: eventName,
+                    timestamp: 1707600000,
+                    timer: 500,
+                },
+                published_at: "2026-03-13T18:00:05.061Z",
+            };
+            await insertData(mockDb, event, device);
+        }
+
+        const insertedRows = mockDb.getInsertedRows();
+        expect(insertedRows).toHaveLength(eventTypes.length);
+        expect(insertedRows.map((row) => row.params[2])).toEqual(eventTypes);
+        insertedRows.forEach((row) => {
+            expect(row.sql).toContain("INSERT INTO raw_events");
+        });
     });
 
     it("stores Tank/Level events in raw_events", async () => {
@@ -121,6 +185,17 @@ describe("insertData - SQLite insertions", () => {
     });
 });
 
+describe("stringifySafely", () => {
+    it("handles circular references in JSON objects", () => {
+        const circular = { key: "value" };
+        circular.self = circular;
+
+        const result = stringifySafely(circular);
+
+        expect(result).toBeNull();
+    });
+});
+
 describe("insertInflux - InfluxDB writes", () => {
     let mockInflux;
 
@@ -135,6 +210,32 @@ describe("insertInflux - InfluxDB writes", () => {
     });
 
     describe("sensor/level events", () => {
+        it("adds sensorType tag for sensor/level events", async () => {
+            const event = {
+                coreid: "370027000547343138333038",
+                data: {
+                    eName: "sensor/level",
+                    timestamp: 1707600000,
+                    timer: 234,
+                },
+                object: {
+                    fill: 1200,
+                    capacity: 2400,
+                },
+            };
+            const device = {
+                id: "370027000547343138333038",
+                name: "EB-RF1",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].tags).toMatchObject({
+                sensorType: "ultrasonic",
+            });
+        });
         it("writes Reservoirs points tagged with sensorType=ultrasonic", async () => {
             const event = {
                 coreid: "370027000547343138333038",
@@ -164,6 +265,32 @@ describe("insertInflux - InfluxDB writes", () => {
     });
 
     describe("Tank/Level events", () => {
+        it("adds sensorType tag for Tank/Level events", async () => {
+            const event = {
+                coreid: "DATACER-TANK-001",
+                data: {
+                    eName: "Tank/Level",
+                    name: "Reservoir-Principal",
+                    rawValue: 450.5,
+                    depth: 1200,
+                    capacity: 5000,
+                    fill: 2500,
+                    lastUpdatedAt: "2024-02-10T15:00:00.000Z",
+                },
+            };
+            const device = {
+                id: "DATACER-TANK-001",
+                name: "G9-G10",
+            };
+
+            await insertInflux(mockInflux, event, device);
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].tags).toMatchObject({
+                sensorType: "pressure",
+            });
+        });
         it("correctly writes Tank/Level events to the Tank_level measurement", async () => {
             const event = {
                 coreid: "DATACER-TANK-001",

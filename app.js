@@ -15,6 +15,7 @@ const dbFile = ExportConfig.database || "data.sqlite3";
 const util = require("util");
 const nodeArg = process.argv;
 const Influx = require("influx");
+const { ensureRawEventsTable } = require("./db-utils");
 const influx = new Influx.InfluxDB({
     host: ExportConfig["influxdb"]["host"],
     port: ExportConfig["influxdb"]["port"],
@@ -26,21 +27,6 @@ const { insertData, insertInflux } = require("./data-handlers");
 let mainDb = null;
 let httpServer = null;
 let isShuttingDown = false;
-function ensureRawEventsTable(db) {
-    db.exec(`
-        CREATE TABLE IF NOT EXISTS raw_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            device_id VARCHAR(64),
-            device_name VARCHAR(64),
-            event_name VARCHAR(128),
-            published_at timestamp,
-            temps_mesure datetime,
-            payload_json TEXT,
-            event_json TEXT
-        )
-    `);
-    return db;
-}
 
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
