@@ -94,3 +94,13 @@ CREATE TABLE datacer_water (
    volume_entaille FLOAT,
    volume_since_reset FLOAT
 );
+CREATE TABLE raw_events (
+   id INTEGER PRIMARY KEY AUTOINCREMENT,
+   device_id VARCHAR(64),
+   device_name VARCHAR(64),
+   event_name VARCHAR(128),
+   published_at timestamp,
+   temps_mesure datetime,
+   payload_json TEXT,
+   event_json TEXT
+);

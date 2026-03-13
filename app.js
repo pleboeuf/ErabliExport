@@ -26,6 +26,21 @@ const { insertData, insertInflux } = require("./data-handlers");
 let mainDb = null;
 let httpServer = null;
 let isShuttingDown = false;
+function ensureRawEventsTable(db) {
+    db.exec(`
+        CREATE TABLE IF NOT EXISTS raw_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id VARCHAR(64),
+            device_name VARCHAR(64),
+            event_name VARCHAR(128),
+            published_at timestamp,
+            temps_mesure datetime,
+            payload_json TEXT,
+            event_json TEXT
+        )
+    `);
+    return db;
+}
 
 function ensureDatabase() {
     return new Promise(function (resolve, reject) {
@@ -37,7 +52,11 @@ function ensureDatabase() {
                     .then(resolve, reject);
             } else {
                 console.log(chalk.gray("Using existing database: %s"), dbFile);
-                resolve(new sqlite3(dbFile));
+                try {
+                    resolve(ensureRawEventsTable(new sqlite3(dbFile)));
+                } catch (dbErr) {
+                    reject(dbErr);
+                }
             }
         });
     });
@@ -48,7 +67,7 @@ function createDatabase(schema) {
         try {
             var db = new sqlite3(dbFile);
             db.exec(schema);
-            resolve(db);
+            resolve(ensureRawEventsTable(db));
         } catch (err) {
             reject(err);
         }
