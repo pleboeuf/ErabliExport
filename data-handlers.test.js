@@ -325,7 +325,7 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(point.tags.tank_name).toBe("Reservoir-Principal");
             expect(point.tags.sensorType).toBe("pressure");
             expect(point.fields.raw_value).toBe(450.5);
-            expect(point.fields.fill).toBe(2500);
+            expect(point.fields.fill).toBe(550);
             expect(point.fields.fill_gallons).toBe(550);
             expect(point.fields.fill_percent).toBe(0.5);
             expect(point.timestamp).toBeDefined();
@@ -462,6 +462,7 @@ describe("insertInflux - InfluxDB writes", () => {
 
             const writtenPoints = mockInflux.getWrittenPoints();
             expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].fields.fill).toBe(550);
             expect(writtenPoints[0].fields.fill_gallons).toBe(550);
             expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
         });

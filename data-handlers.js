@@ -648,8 +648,8 @@ function insertInflux(influx, event, device) {
         const data = event.data;
         const tank_name = data.name;
         const raw_value = data.rawValue;
-        const fill = data.fill;
         const tankMetrics = getDatacerTankFillMetrics(data, event.object);
+        const fill_gallons = tankMetrics ? tankMetrics.fillGallons : 0;
         const mirroredReservoirDeviceName =
             getDatacerReservoirMirrorDeviceName(tank_name);
         var point = [
@@ -663,8 +663,8 @@ function insertInflux(influx, event, device) {
                 },
                 fields: {
                     raw_value: raw_value,
-                    fill: fill,
-                    fill_gallons: tankMetrics ? tankMetrics.fillGallons : 0,
+                    fill: fill_gallons,
+                    fill_gallons: fill_gallons,
                     fill_percent: tankMetrics ? tankMetrics.fillPercent : 0,
                 },
                 timestamp: publishDate,
@@ -691,7 +691,8 @@ function insertInflux(influx, event, device) {
                     "Influx-> Tank_level " +
                         tank_name +
                         " fill: " +
-                        fill +
+                        fill_gallons +
+                        " gal" +
                         " " +
                         publishDate,
                 ),
