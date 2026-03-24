@@ -8,7 +8,20 @@ const readFile = Promise.denodeify(fs.readFile);
 const WebSocketClient = require("websocket").client;
 const Schema = require("./influxdbSchema.json");
 const ExportConfig = require("./config.json");
-const config = require(ExportConfig.dashboardConfig.filename);
+const path = require("path");
+const dashboardConfigPath = path.resolve(
+    __dirname,
+    ExportConfig.dashboardConfig.filename,
+);
+const baseDashboardConfig = require(dashboardConfigPath);
+const dashboardDataPathForInflux = path.resolve(
+    path.dirname(dashboardConfigPath),
+    baseDashboardConfig.store.filename,
+);
+const config = JSON.parse(JSON.stringify(baseDashboardConfig));
+config.store = Object.assign({}, baseDashboardConfig.store, {
+    filename: path.resolve(__dirname, "data/dashboard.json"),
+});
 const sqlite3 = require("better-sqlite3");
 const chalk = require("chalk");
 const dbFile = ExportConfig.database || "data.sqlite3";
@@ -91,7 +104,6 @@ dashboard
         console.error("Error starting dashboard: ", err.stack);
     });
 const express = require("express");
-const path = require("path");
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 function startApp(db) {
@@ -216,7 +228,10 @@ function startApp(db) {
     dashboard.onChange(function (data, event, device) {
         void data;
         return Promise.all([
-            insertInflux(influx, event, device),
+            insertInflux(influx, event, device, {
+                tankConfigs: config.tanks,
+                dashboardDataPath: dashboardDataPathForInflux,
+            }),
             insertData(db, event, device, { dashboard }),
         ]);
     });

@@ -1,4 +1,7 @@
 "use strict";
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
 const sqlite3 = require("better-sqlite3");
 const {
     insertData,
@@ -373,7 +376,7 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(reservoirPoint.tags.deviceId).toBe("EB-RF2");
             expect(reservoirPoint.tags.deviceName).toBe("EB-RF2");
             expect(reservoirPoint.tags.sensorType).toBe("pressure");
-            expect(reservoirPoint.fields.fill_gallons).toBe(22);
+            expect(reservoirPoint.fields.fill_gallons).toBe(21);
             expect(reservoirPoint.fields.fill_percent).toBeCloseTo(
                 0.9299622193151216,
             );
@@ -465,6 +468,309 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(writtenPoints[0].fields.fill).toBe(550);
             expect(writtenPoints[0].fields.fill_gallons).toBe(550);
             expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
+        });
+
+        it("prioritizes ErabliDash data snapshot values for Datacer fill metrics", async () => {
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "erabli-datacer-fill-"),
+            );
+            const dashboardDataPath = path.join(tempDir, "dashboard.json");
+            fs.writeFileSync(
+                dashboardDataPath,
+                JSON.stringify({
+                    tanks: [
+                        {
+                            device: "BASSIN RF2-RS1-RS2",
+                            code: "RS2",
+                            sensorType: "pressure",
+                            rawValue: 15,
+                            fill: 3000,
+                            capacity: 6000,
+                        },
+                    ],
+                }),
+                "utf8",
+            );
+
+            try {
+                const event = {
+                    coreid: "BASSIN RF2-RS1-RS2",
+                    data: {
+                        eName: "Tank/Level",
+                        name: "RS2",
+                        rawValue: 15,
+                        capacity: 10,
+                        fill: 10,
+                        lastUpdatedAt: "2026-03-24T16:00:00.000Z",
+                    },
+                    object: {
+                        fill: 100,
+                        capacity: 200,
+                    },
+                };
+                const device = {
+                    id: "BASSIN RF2-RS1-RS2",
+                    name: "BASSIN RF2-RS1-RS2",
+                };
+
+                await insertInflux(mockInflux, event, device, {
+                    dashboardDataPath: dashboardDataPath,
+                    tankConfigs: [],
+                });
+
+                const writtenPoints = mockInflux.getWrittenPoints();
+                expect(writtenPoints).toHaveLength(1);
+                expect(writtenPoints[0].fields.fill_gallons).toBe(660);
+                expect(writtenPoints[0].fields.fill_percent).toBe(0.5);
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("ignores dashboard snapshot entries without rawValue and falls back to raw+config", async () => {
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "erabli-datacer-fill-"),
+            );
+            const dashboardDataPath = path.join(tempDir, "dashboard.json");
+            fs.writeFileSync(
+                dashboardDataPath,
+                JSON.stringify({
+                    tanks: [
+                        {
+                            device: "BASSIN RF2-RS1-RS2",
+                            code: "RS2",
+                            sensorType: "pressure",
+                            fill: 3000,
+                            capacity: 6000,
+                        },
+                    ],
+                }),
+                "utf8",
+            );
+
+            try {
+                const event = {
+                    coreid: "BASSIN RF2-RS1-RS2",
+                    data: {
+                        eName: "Tank/Level",
+                        name: "RS2",
+                        rawValue: 32.33,
+                        capacity: 10,
+                        fill: 10,
+                        lastUpdatedAt: "2026-03-24T16:00:00.000Z",
+                    },
+                };
+                const device = {
+                    id: "BASSIN RF2-RS1-RS2",
+                    name: "BASSIN RF2-RS1-RS2",
+                };
+
+                await insertInflux(mockInflux, event, device, {
+                    dashboardDataPath: dashboardDataPath,
+                    tankConfigs: [
+                        {
+                            code: "RS2",
+                            device: "BASSIN RF2-RS1-RS2",
+                            shape: "cylinder",
+                            orientation: "horizontal",
+                            length: 7010,
+                            diameter: 1842,
+                            sensorType: "pressure",
+                            rawUnit: "in",
+                            offset: 330,
+                            scaleFactor: 1.0,
+                        },
+                    ],
+                });
+
+                const writtenPoints = mockInflux.getWrittenPoints();
+                expect(writtenPoints).toHaveLength(1);
+                expect(writtenPoints[0].fields.fill_gallons).toBe(880);
+                expect(writtenPoints[0].fields.fill_percent).toBeCloseTo(
+                    0.2140659782177984,
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("ignores stale dashboard snapshot rawValue and falls back to raw+config", async () => {
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "erabli-datacer-fill-"),
+            );
+            const dashboardDataPath = path.join(tempDir, "dashboard.json");
+            fs.writeFileSync(
+                dashboardDataPath,
+                JSON.stringify({
+                    tanks: [
+                        {
+                            device: "BASSIN RF2-RS1-RS2",
+                            code: "RS2",
+                            sensorType: "pressure",
+                            rawValue: 15,
+                            fill: 3000,
+                            capacity: 6000,
+                        },
+                    ],
+                }),
+                "utf8",
+            );
+
+            try {
+                const event = {
+                    coreid: "BASSIN RF2-RS1-RS2",
+                    data: {
+                        eName: "Tank/Level",
+                        name: "RS2",
+                        rawValue: 32.33,
+                        capacity: 10,
+                        fill: 10,
+                        lastUpdatedAt: "2026-03-24T16:00:00.000Z",
+                    },
+                };
+                const device = {
+                    id: "BASSIN RF2-RS1-RS2",
+                    name: "BASSIN RF2-RS1-RS2",
+                };
+
+                await insertInflux(mockInflux, event, device, {
+                    dashboardDataPath: dashboardDataPath,
+                    tankConfigs: [
+                        {
+                            code: "RS2",
+                            device: "BASSIN RF2-RS1-RS2",
+                            shape: "cylinder",
+                            orientation: "horizontal",
+                            length: 7010,
+                            diameter: 1842,
+                            sensorType: "pressure",
+                            rawUnit: "in",
+                            offset: 330,
+                            scaleFactor: 1.0,
+                        },
+                    ],
+                });
+
+                const writtenPoints = mockInflux.getWrittenPoints();
+                expect(writtenPoints).toHaveLength(1);
+                expect(writtenPoints[0].fields.fill_gallons).toBe(880);
+                expect(writtenPoints[0].fields.fill_percent).toBeCloseTo(
+                    0.2140659782177984,
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("ignores implausible dashboard snapshot values and falls back to raw+config", async () => {
+            const tempDir = fs.mkdtempSync(
+                path.join(os.tmpdir(), "erabli-datacer-fill-"),
+            );
+            const dashboardDataPath = path.join(tempDir, "dashboard.json");
+            fs.writeFileSync(
+                dashboardDataPath,
+                JSON.stringify({
+                    tanks: [
+                        {
+                            device: "BASSIN RS5-RS6",
+                            code: "RS5",
+                            sensorType: "pressure",
+                            rawValue: 574,
+                            fill: 63898.40415045242,
+                            capacity: 4173.470869652411,
+                        },
+                    ],
+                }),
+                "utf8",
+            );
+
+            try {
+                const event = {
+                    coreid: "BASSIN RS5-RS6",
+                    data: {
+                        eName: "Tank/Level",
+                        name: "RS5",
+                        rawValue: 26.22,
+                        capacity: 56,
+                        fill: 56,
+                        lastUpdatedAt: "2026-03-24T16:00:00.000Z",
+                    },
+                };
+                const device = {
+                    id: "BASSIN RS5-RS6",
+                    name: "BASSIN RS5-RS6",
+                };
+
+                await insertInflux(mockInflux, event, device, {
+                    dashboardDataPath: dashboardDataPath,
+                    tankConfigs: [
+                        {
+                            code: "RS5",
+                            device: "BASSIN RS5-RS6",
+                            shape: "u",
+                            length: 3657,
+                            diameter: 1219,
+                            totalHeight: 1067,
+                            sensorType: "pressure",
+                            rawUnit: "in",
+                            offset: 115,
+                            scaleFactor: 1.0,
+                        },
+                    ],
+                });
+
+                const writtenPoints = mockInflux.getWrittenPoints();
+                expect(writtenPoints).toHaveLength(1);
+                expect(writtenPoints[0].fields.fill_gallons).toBe(412);
+                expect(writtenPoints[0].fields.fill_percent).toBeCloseTo(
+                    0.44891913971939174,
+                );
+            } finally {
+                fs.rmSync(tempDir, { recursive: true, force: true });
+            }
+        });
+
+        it("falls back to raw+config calibration when dashboard snapshot is unavailable", async () => {
+            const event = {
+                coreid: "BASSIN RF2-RS1-RS2",
+                data: {
+                    eName: "Tank/Level",
+                    name: "RS2",
+                    rawValue: 32.33,
+                    capacity: 10,
+                    fill: 10,
+                    lastUpdatedAt: "2026-03-24T16:00:00.000Z",
+                },
+            };
+            const device = {
+                id: "BASSIN RF2-RS1-RS2",
+                name: "BASSIN RF2-RS1-RS2",
+            };
+
+            await insertInflux(mockInflux, event, device, {
+                dashboardDataPath: "/tmp/does-not-exist-dashboard.json",
+                tankConfigs: [
+                    {
+                        code: "RS2",
+                        device: "BASSIN RF2-RS1-RS2",
+                        shape: "cylinder",
+                        orientation: "horizontal",
+                        length: 7010,
+                        diameter: 1842,
+                        sensorType: "pressure",
+                        rawUnit: "in",
+                        offset: 330,
+                        scaleFactor: 1.0,
+                    },
+                ],
+            });
+
+            const writtenPoints = mockInflux.getWrittenPoints();
+            expect(writtenPoints).toHaveLength(1);
+            expect(writtenPoints[0].fields.fill_gallons).toBe(880);
+            expect(writtenPoints[0].fields.fill_percent).toBeCloseTo(
+                0.2140659782177984,
+            );
         });
     });
 

@@ -1,10 +1,32 @@
 "use strict";
+const fs = require("fs");
 const moment = require("moment");
 const Promise = require("promise");
 const util = require("util");
+const LITERS_PER_GALLON = 4.54609188;
+const MM_PER_INCH = 25.4;
+const dashboardSnapshotCache = {
+    path: null,
+    mtimeMs: null,
+    data: null,
+};
 
 function liters2gallons(liters) {
-    return Math.ceil(liters / 4.54609188);
+    return Math.ceil(liters / LITERS_PER_GALLON);
+}
+
+function litersToDisplayedDatacerGallons(liters) {
+    if (!Number.isFinite(liters)) {
+        return null;
+    }
+    return Number((liters / LITERS_PER_GALLON).toFixed(0));
+}
+
+function normalizeTankKey(value) {
+    if (typeof value !== "string") {
+        return "";
+    }
+    return value.trim().toUpperCase();
 }
 
 const DATACER_RESERVOIR_MIRROR_TANKS = new Set(["RF2"]);
@@ -67,8 +89,299 @@ function stringifySafely(value) {
         return null;
     }
 }
+function readDashboardDataSnapshot(dashboardDataPath) {
+    if (typeof dashboardDataPath !== "string" || dashboardDataPath.length === 0) {
+        return null;
+    }
+    try {
+        const stat = fs.statSync(dashboardDataPath);
+        if (
+            dashboardSnapshotCache.path === dashboardDataPath &&
+            dashboardSnapshotCache.mtimeMs === stat.mtimeMs &&
+            dashboardSnapshotCache.data
+        ) {
+            return dashboardSnapshotCache.data;
+        }
+        const content = fs.readFileSync(dashboardDataPath, "utf8");
+        const parsed = JSON.parse(content);
+        dashboardSnapshotCache.path = dashboardDataPath;
+        dashboardSnapshotCache.mtimeMs = stat.mtimeMs;
+        dashboardSnapshotCache.data = parsed;
+        return parsed;
+    } catch (err) {
+        if (
+            dashboardSnapshotCache.path === dashboardDataPath &&
+            dashboardSnapshotCache.data
+        ) {
+            return dashboardSnapshotCache.data;
+        }
+        return null;
+    }
+}
 
-function getDatacerTankFillMetrics(data, tankObject) {
+function isPressureTank(tankDefinition) {
+    return normalizeForMatching(tankDefinition && tankDefinition.sensorType) === "pressure";
+}
+
+function findPressureTankDefinition(tanks, deviceName, tankName) {
+    if (!Array.isArray(tanks)) {
+        return null;
+    }
+    const normalizedTankName = normalizeTankKey(tankName);
+    if (!normalizedTankName) {
+        return null;
+    }
+    const normalizedDeviceName = normalizeTankKey(deviceName);
+    const codeMatches = tanks.filter(
+        (tankDefinition) =>
+            isPressureTank(tankDefinition) &&
+            normalizeTankKey(tankDefinition.code) === normalizedTankName,
+    );
+    if (codeMatches.length === 0) {
+        return null;
+    }
+    if (normalizedDeviceName) {
+        const exactDeviceMatch = codeMatches.find(
+            (tankDefinition) =>
+                normalizeTankKey(tankDefinition.device) === normalizedDeviceName,
+        );
+        if (exactDeviceMatch) {
+            return exactDeviceMatch;
+        }
+    }
+    return codeMatches.length === 1 ? codeMatches[0] : null;
+}
+
+function getTankRawUnit(tankDefinition) {
+    const rawUnit = tankDefinition.rawUnit || tankDefinition.units;
+    if (typeof rawUnit !== "string") {
+        return "";
+    }
+    return rawUnit.toLowerCase();
+}
+
+function convertRawToMillimeters(rawValue, rawUnit) {
+    const numericRawValue = parseNumberOrNull(rawValue);
+    if (!Number.isFinite(numericRawValue)) {
+        return NaN;
+    }
+    switch (rawUnit) {
+        case "in":
+        case "inch":
+        case "inches":
+        case "po":
+        case "pouce":
+        case "pouces":
+            return numericRawValue * MM_PER_INCH;
+        case "mm":
+        case "millimeter":
+        case "millimeters":
+        case "millimetre":
+        case "millimetres":
+        default:
+            return numericRawValue;
+    }
+}
+
+function getTankLevelMmFromRaw(rawValue, tankDefinition) {
+    const sensorType = normalizeForMatching(tankDefinition.sensorType) || "ultrasonic";
+    const rawUnit =
+        getTankRawUnit(tankDefinition) || (sensorType === "pressure" ? "in" : "mm");
+    const scaleFactor = parseNumberOrNull(tankDefinition.scaleFactor);
+    let rawValueMm = convertRawToMillimeters(rawValue, rawUnit);
+
+    if (!Number.isFinite(rawValueMm)) {
+        return NaN;
+    }
+    if (Number.isFinite(scaleFactor)) {
+        rawValueMm *= scaleFactor;
+    }
+    if (sensorType === "pressure") {
+        const offsetMm = parseNumberOrNull(tankDefinition.offset);
+        const calibratedLevelMm =
+            rawValueMm - (Number.isFinite(offsetMm) ? offsetMm : 0);
+        return Math.max(0, calibratedLevelMm);
+    }
+
+    const sensorHeightMm = parseNumberOrNull(tankDefinition.sensorHeight);
+    if (!Number.isFinite(sensorHeightMm)) {
+        return Math.max(0, rawValueMm);
+    }
+    return Math.max(0, sensorHeightMm - rawValueMm);
+}
+
+function getHorizontalCylinderFillLiters(levelMm, diameterMm, lengthMm) {
+    if (
+        !Number.isFinite(levelMm) ||
+        !Number.isFinite(diameterMm) ||
+        !Number.isFinite(lengthMm) ||
+        diameterMm <= 0 ||
+        lengthMm <= 0
+    ) {
+        return NaN;
+    }
+    const level = Math.max(0, Math.min(levelMm, diameterMm));
+    const h = level / 1000;
+    const d = diameterMm / 1000;
+    const r = d / 2;
+    return (
+        (Math.pow(r, 2) * Math.acos((r - h) / r) -
+            (r - h) * Math.sqrt(d * h - Math.pow(h, 2))) *
+        lengthMm
+    );
+}
+
+function getUShapedTankFillLiters(levelMm, diameterMm, lengthMm) {
+    if (
+        !Number.isFinite(levelMm) ||
+        !Number.isFinite(diameterMm) ||
+        !Number.isFinite(lengthMm)
+    ) {
+        return NaN;
+    }
+    const level = Math.max(0, levelMm);
+    const bottomLevel = Math.min(level, diameterMm / 2);
+    const bottomFill = getHorizontalCylinderFillLiters(
+        bottomLevel,
+        diameterMm,
+        lengthMm,
+    );
+    const topFill =
+        (((diameterMm / 1000) * lengthMm) / 1000) *
+        Math.max(0, level - diameterMm / 2);
+    return bottomFill + topFill;
+}
+
+function calculateTankFillLitersFromRaw(rawValue, tankDefinition) {
+    const levelMm = getTankLevelMmFromRaw(rawValue, tankDefinition);
+    if (!Number.isFinite(levelMm)) {
+        return NaN;
+    }
+    const diameterMm = parseNumberOrNull(tankDefinition.diameter);
+    const lengthMm = parseNumberOrNull(tankDefinition.length);
+    if (
+        tankDefinition.shape === "cylinder" &&
+        tankDefinition.orientation === "horizontal"
+    ) {
+        return getHorizontalCylinderFillLiters(levelMm, diameterMm, lengthMm);
+    }
+    if (tankDefinition.shape === "u") {
+        return getUShapedTankFillLiters(levelMm, diameterMm, lengthMm);
+    }
+    return NaN;
+}
+
+function calculateTankCapacityLiters(tankDefinition) {
+    const diameterMm = parseNumberOrNull(tankDefinition.diameter);
+    const lengthMm = parseNumberOrNull(tankDefinition.length);
+
+    if (
+        tankDefinition.shape === "cylinder" &&
+        tankDefinition.orientation === "horizontal"
+    ) {
+        if (!Number.isFinite(diameterMm) || !Number.isFinite(lengthMm)) {
+            return null;
+        }
+        return Math.PI * Math.pow(diameterMm / 2000, 2) * lengthMm;
+    }
+    if (tankDefinition.shape === "u") {
+        const totalHeightMm = parseNumberOrNull(tankDefinition.totalHeight);
+        const capacity = getUShapedTankFillLiters(
+            totalHeightMm,
+            diameterMm,
+            lengthMm,
+        );
+        return Number.isFinite(capacity) ? capacity : null;
+    }
+    return null;
+}
+
+function buildDatacerTankFillMetrics(fillLiters, capacityLiters, source) {
+    const fillGallons = litersToDisplayedDatacerGallons(fillLiters);
+    if (!Number.isFinite(fillGallons)) {
+        return null;
+    }
+    return {
+        source: source,
+        fillLiters: fillLiters,
+        fillGallons: fillGallons,
+        fillPercent:
+            Number.isFinite(capacityLiters) && capacityLiters > 0
+                ? fillLiters / capacityLiters
+                : 0,
+    };
+}
+
+function getDatacerTankFillMetricsFromDashboardData(data, options) {
+    const dashboardData = readDashboardDataSnapshot(options.dashboardDataPath);
+    if (!dashboardData) {
+        return null;
+    }
+    const tankDefinition = findPressureTankDefinition(
+        dashboardData.tanks,
+        options.deviceName,
+        data && data.name,
+    );
+    if (!tankDefinition) {
+        return null;
+    }
+    const snapshotRawValue = parseNumberOrNull(tankDefinition.rawValue);
+    if (!Number.isFinite(snapshotRawValue)) {
+        return null;
+    }
+    const eventRawValue = parseNumberOrNull(
+        data &&
+            (typeof data.rawValue !== "undefined"
+                ? data.rawValue
+                : data.ReadingValue),
+    );
+    if (
+        Number.isFinite(eventRawValue) &&
+        Math.abs(snapshotRawValue - eventRawValue) > 0.001
+    ) {
+        return null;
+    }
+    const fillLiters = parseNumberOrNull(tankDefinition.fill);
+    const capacityLiters = parseNumberOrNull(tankDefinition.capacity);
+    if (!Number.isFinite(fillLiters)) {
+        return null;
+    }
+    if (
+        Number.isFinite(capacityLiters) &&
+        capacityLiters > 0 &&
+        (fillLiters < 0 || fillLiters > capacityLiters * 1.1)
+    ) {
+        return null;
+    }
+    return buildDatacerTankFillMetrics(
+        fillLiters,
+        capacityLiters,
+        "dashboard_data_json",
+    );
+}
+
+function getDatacerTankFillMetricsFromRawAndConfig(data, options) {
+    const rawValue = parseNumberOrNull(data && data.rawValue);
+    if (!Number.isFinite(rawValue)) {
+        return null;
+    }
+    const tankDefinition = findPressureTankDefinition(
+        options.tankConfigs,
+        options.deviceName,
+        data && data.name,
+    );
+    if (!tankDefinition) {
+        return null;
+    }
+    const fillLiters = calculateTankFillLitersFromRaw(rawValue, tankDefinition);
+    const capacityLiters = calculateTankCapacityLiters(tankDefinition);
+    if (!Number.isFinite(fillLiters)) {
+        return null;
+    }
+    return buildDatacerTankFillMetrics(fillLiters, capacityLiters, "raw+config");
+}
+
+function getDatacerTankFillMetricsFromEventFallback(data, tankObject) {
     const objectFillValue = parseNumberOrNull(tankObject && tankObject.fill);
     const objectCapacityValue = parseNumberOrNull(
         tankObject && tankObject.capacity,
@@ -84,14 +397,17 @@ function getDatacerTankFillMetrics(data, tankObject) {
     if (fillValue === null) {
         return null;
     }
+    const source =
+        objectFillValue !== null ? "event_object_fallback" : "event_payload_fallback";
+    return buildDatacerTankFillMetrics(fillValue, capacityValue, source);
+}
 
-    return {
-        fillGallons: liters2gallons(fillValue),
-        fillPercent:
-            capacityValue !== null && capacityValue > 0
-                ? fillValue / capacityValue
-                : 0,
-    };
+function getDatacerTankFillMetrics(data, tankObject, options = {}) {
+    return (
+        getDatacerTankFillMetricsFromDashboardData(data, options) ||
+        getDatacerTankFillMetricsFromRawAndConfig(data, options) ||
+        getDatacerTankFillMetricsFromEventFallback(data, tankObject)
+    );
 }
 
 /**
@@ -170,7 +486,7 @@ function insertData(db, event, device, options = {}) {
  * @param {Object} event - Event data
  * @param {Object} device - Device information
  */
-function insertInflux(influx, event, device) {
+function insertInflux(influx, event, device, options = {}) {
     const deviceId = event.coreid;
     const deviceName = device.name;
     var eventName = event.data.eName;
@@ -648,8 +964,20 @@ function insertInflux(influx, event, device) {
         const data = event.data;
         const tank_name = data.name;
         const raw_value = data.rawValue;
-        const tankMetrics = getDatacerTankFillMetrics(data, event.object);
-        const fill_gallons = tankMetrics ? tankMetrics.fillGallons : 0;
+        const tankMetrics = getDatacerTankFillMetrics(data, event.object, {
+            deviceName: deviceName,
+            tankConfigs: options.tankConfigs,
+            dashboardDataPath: options.dashboardDataPath,
+        });
+        if (!tankMetrics) {
+            console.warn(
+                "Skipping Tank_level write for '%s' on '%s': unable to resolve calibrated fill",
+                tank_name,
+                deviceName,
+            );
+            return Promise.resolve();
+        }
+        const fill_gallons = tankMetrics.fillGallons;
         const mirroredReservoirDeviceName =
             getDatacerReservoirMirrorDeviceName(tank_name);
         var point = [
@@ -665,7 +993,7 @@ function insertInflux(influx, event, device) {
                     raw_value: raw_value,
                     fill: fill_gallons,
                     fill_gallons: fill_gallons,
-                    fill_percent: tankMetrics ? tankMetrics.fillPercent : 0,
+                    fill_percent: tankMetrics.fillPercent,
                 },
                 timestamp: publishDate,
             },
