@@ -334,12 +334,12 @@ describe("insertInflux - InfluxDB writes", () => {
             expect(point.timestamp).toBeDefined();
         });
 
-        it("mirrors Datacer RF2 Tank/Level events into Reservoirs as EB-RF2", async () => {
+        it("mirrors Datacer RS1 Tank/Level events into Reservoirs as EB-RS1", async () => {
             const event = {
                 coreid: "BASSIN RF2-RS1-RS2",
                 data: {
                     eName: "Tank/Level",
-                    name: "RF2",
+                    name: "RS1",
                     rawValue: 76.43,
                     depth: 0,
                     capacity: 103.23,
@@ -369,12 +369,12 @@ describe("insertInflux - InfluxDB writes", () => {
 
             expect(tankPoint).toBeDefined();
             expect(tankPoint.tags.deviceName).toBe("BASSIN RF2-RS1-RS2");
-            expect(tankPoint.tags.tank_name).toBe("RF2");
+            expect(tankPoint.tags.tank_name).toBe("RS1");
             expect(tankPoint.tags.sensorType).toBe("pressure");
 
             expect(reservoirPoint).toBeDefined();
-            expect(reservoirPoint.tags.deviceId).toBe("EB-RF2");
-            expect(reservoirPoint.tags.deviceName).toBe("EB-RF2");
+            expect(reservoirPoint.tags.deviceId).toBe("EB-RS1");
+            expect(reservoirPoint.tags.deviceName).toBe("EB-RS1");
             expect(reservoirPoint.tags.sensorType).toBe("pressure");
             expect(reservoirPoint.fields.fill_gallons).toBe(21);
             expect(reservoirPoint.fields.fill_percent).toBeCloseTo(

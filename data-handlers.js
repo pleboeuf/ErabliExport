@@ -29,7 +29,7 @@ function normalizeTankKey(value) {
     return value.trim().toUpperCase();
 }
 
-const DATACER_RESERVOIR_MIRROR_TANKS = new Set(["RF2"]);
+const DATACER_RESERVOIR_MIRROR_TANKS = new Set(["RS1"]);
 
 function getDatacerReservoirMirrorDeviceName(tankName) {
     if (typeof tankName !== "string") {
