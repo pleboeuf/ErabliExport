@@ -4,7 +4,8 @@
     "private": true,
     "scripts": {
         "start": "node app.js",
-        "test": "jest"
+        "test": "jest",
+        "playback:influx": "node scripts/playback-to-influx.js"
     },
     "dependencies": {
         "better-sqlite3": "^11.6.0",
